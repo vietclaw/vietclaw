@@ -62,5 +62,5 @@ func handleSettingsReload(application *app.App) http.HandlerFunc {
 
 func applyConfig(application *app.App, cfg config.Config) {
 	application.Config = cfg
-	application.Agent = agent.NewService(cfg, application.DB)
+	application.Agent = agent.NewService(cfg, application.DB).WithLogger(application.Logger)
 }

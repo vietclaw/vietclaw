@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"vietclaw/internal/providers"
 )
@@ -48,13 +49,13 @@ func (s *Store) SearchHybrid(ctx context.Context, scope, query string, limit int
 	for idx, rec := range keywordCandidates {
 		score := float32(1.0)
 		if len(rec.Embedding) > 0 {
-			score += CosineSimilarity(queryEmb, rec.Embedding)
+			score += CosineSimilarity(queryEmb, rec.Embedding) * recencyDecay(rec.CreatedAt)
 		}
 		score += float32(len(keywordCandidates)-idx) * 0.001
 		scored[rec.ID] = scoredRecord{record: rec, score: score}
 	}
 	for _, rec := range vectorCandidates {
-		score := CosineSimilarity(queryEmb, rec.Embedding)
+		score := CosineSimilarity(queryEmb, rec.Embedding) * recencyDecay(rec.CreatedAt)
 		if existing, ok := scored[rec.ID]; ok {
 			if score > existing.score {
 				existing.score = score
@@ -198,4 +199,20 @@ WHERE lower(content) LIKE ?`
 	}
 	defer rows.Close()
 	return scanRecords(rows)
+}
+
+func recencyDecay(createdAtStr string) float32 {
+	t, err := time.Parse(time.RFC3339, createdAtStr)
+	if err != nil {
+		t, err = time.Parse("2006-01-02 15:04:05", createdAtStr)
+		if err != nil {
+			return 1.0
+		}
+	}
+	age := time.Since(t)
+	ageInDays := float64(age) / float64(24*time.Hour)
+	if ageInDays < 0 {
+		ageInDays = 0
+	}
+	return float32(1.0 / (1.0 + 0.02*ageInDays))
 }

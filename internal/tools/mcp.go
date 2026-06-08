@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"vietclaw/internal/config"
@@ -29,6 +30,7 @@ const (
 type MCPClient struct {
 	server config.MCPServerConfig
 	client *http.Client
+	once   sync.Once
 }
 
 func NewMCPClient(server config.MCPServerConfig) *MCPClient {
@@ -177,6 +179,25 @@ func (c *MCPClient) callStdio(ctx context.Context, method string, params map[str
 	if c.server.Command == "" {
 		return fmt.Errorf("mcp server %s missing command", c.server.ID)
 	}
+
+	var installErr error
+	c.once.Do(func() {
+		if c.server.InstallCommand != "" {
+			instCtx, instCancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer instCancel()
+			instCmd := exec.CommandContext(instCtx, c.server.InstallCommand, c.server.InstallArgs...)
+			if len(c.server.Env) > 0 {
+				instCmd.Env = append(os.Environ(), envPairs(c.server.Env)...)
+			}
+			if runErr := instCmd.Run(); runErr != nil {
+				installErr = fmt.Errorf("mcp installation failed: %w", runErr)
+			}
+		}
+	})
+	if installErr != nil {
+		return installErr
+	}
+
 	timeout := defaultMCPStdioCall
 	if c.server.TimeoutSeconds > 0 {
 		timeout = time.Duration(c.server.TimeoutSeconds) * time.Second

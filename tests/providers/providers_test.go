@@ -45,12 +45,14 @@ func TestGeminiProviderChatAndStream(t *testing.T) {
 	}))
 	defer server.Close()
 
+	t.Setenv("TEST_GEMINI_API_KEY", "test-api-key")
 	p := providers.New(config.ProviderConfig{
 		ID:           "gemini",
 		Type:         providers.TypeGemini,
 		Enabled:      true,
 		DefaultModel: "gemini-test",
 		BaseURL:      server.URL,
+		APIKeyEnv:    "TEST_GEMINI_API_KEY",
 	})
 	resp, err := p.Chat(context.Background(), providers.ChatRequest{
 		Messages: []providers.Message{{Role: "user", Content: "hello"}},
@@ -83,18 +85,20 @@ func TestGeminiProviderChatAndStream(t *testing.T) {
 func TestAnthropicProviderRealStream(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = fmt.Fprint(w, "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"xin\"}}\n\n")
-		_, _ = fmt.Fprint(w, "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" chào\"}}\n\n")
-		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_stop\"}\n\n")
+		_, _ = fmt.Fprint(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"xin\"}}\n\n")
+		_, _ = fmt.Fprint(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" chào\"}}\n\n")
+		_, _ = fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 	}))
 	defer server.Close()
 
+	t.Setenv("TEST_ANTHROPIC_API_KEY", "test-api-key")
 	p := providers.New(config.ProviderConfig{
 		ID:           "anthropic",
 		Type:         providers.TypeAnthropic,
 		Enabled:      true,
 		DefaultModel: "claude-test",
 		BaseURL:      server.URL,
+		APIKeyEnv:    "TEST_ANTHROPIC_API_KEY",
 	})
 	ch, err := p.ChatStream(context.Background(), providers.ChatRequest{
 		Messages: []providers.Message{{Role: "user", Content: "hello"}},

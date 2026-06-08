@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"vietclaw/internal/config"
 	"vietclaw/internal/i18n"
@@ -12,6 +15,7 @@ import (
 const (
 	cmdVersion  = "version"
 	cmdInit     = "init"
+	cmdSetup    = "setup"
 	cmdDaemon   = "daemon"
 	cmdStatus   = "status"
 	cmdDoctor   = "doctor"
@@ -36,6 +40,7 @@ func main() {
 
 func run(args []string) error {
 	version.Set(buildVersion, buildCommit)
+	loadEnvFiles()
 
 	if len(args) < 2 {
 		printUsage()
@@ -47,6 +52,8 @@ func run(args []string) error {
 		return runVersion()
 	case cmdInit:
 		return runInit()
+	case cmdSetup:
+		return runSetup()
 	case cmdDaemon:
 		return runDaemon()
 	case cmdStatus:
@@ -73,4 +80,38 @@ func run(args []string) error {
 
 func printUsage() {
 	fmt.Println(i18n.T(config.DefaultAgentLanguage, i18n.CLIUsage))
+}
+
+func loadEnvFiles() {
+	// 1. Load from current working directory
+	loadEnvFile(".env")
+
+	// 2. Load from data dir
+	if paths, err := config.DefaultPaths(); err == nil {
+		loadEnvFile(filepath.Join(paths.DataDir, ".env"))
+	}
+}
+
+func loadEnvFile(path string) {
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			val = strings.Trim(val, `"'`)
+			if os.Getenv(key) == "" {
+				_ = os.Setenv(key, val)
+			}
+		}
+	}
 }

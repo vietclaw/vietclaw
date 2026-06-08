@@ -117,6 +117,8 @@ type MCPServerConfig struct {
 	Args           []string          `json:"args,omitempty"`
 	Env            map[string]string `json:"env,omitempty"`
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
+	InstallCommand string            `json:"install_command,omitempty"`
+	InstallArgs    []string          `json:"install_args,omitempty"`
 }
 
 type ShellToolConfig struct {

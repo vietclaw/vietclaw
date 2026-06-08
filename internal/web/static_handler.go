@@ -54,14 +54,27 @@ func handleStatic(application *app.App) http.HandlerFunc {
 }
 
 func serveEmbeddedFile(w http.ResponseWriter, r *http.Request, name string, file fs.File, modTime time.Time) {
-	if strings.HasPrefix(name, "_nuxt/") || strings.HasPrefix(name, "assets/") {
+	ext := path.Ext(name)
+	if name == indexFile || ext == ".html" {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	} else if strings.HasPrefix(name, "_nuxt/") || strings.HasPrefix(name, "assets/") {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	} else {
 		w.Header().Set("Cache-Control", "no-cache")
 	}
-	if contentType := mime.TypeByExtension(path.Ext(name)); contentType != "" {
+
+	contentType := mime.TypeByExtension(ext)
+	// Safeguard against corrupted Windows registry mappings
+	if ext == ".js" && !strings.Contains(contentType, "javascript") {
+		contentType = "application/javascript"
+	} else if ext == ".css" && !strings.Contains(contentType, "css") {
+		contentType = "text/css"
+	}
+	
+	if contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
+
 	reader, ok := file.(interface {
 		Read([]byte) (int, error)
 		Seek(int64, int) (int64, error)

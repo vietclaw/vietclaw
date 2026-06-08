@@ -1,20 +1,16 @@
 package providers
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
-	"strings"
 
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/shared"
 	"vietclaw/internal/config"
 )
-
-const openAIChatCompletionsPath = "/v1/chat/completions"
 
 type OpenAICompatible struct {
 	providerBase
@@ -25,62 +21,57 @@ func NewOpenAICompatible(cfg config.ProviderConfig, client *http.Client) *OpenAI
 	return &OpenAICompatible{providerBase: providerBase{cfg: cfg}, client: client}
 }
 
-func (p *OpenAICompatible) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+func (p *OpenAICompatible) openaiClient() (*openai.Client, error) {
 	apiKey := os.Getenv(p.cfg.APIKeyEnv)
 	if p.cfg.APIKeyEnv != "" && apiKey == "" {
-		return ChatResponse{Provider: p.ID(), Model: req.Model, RawError: "missing api key env"}, fmt.Errorf("missing api key env %s", p.cfg.APIKeyEnv)
+		return nil, fmt.Errorf("missing api key env %s", p.cfg.APIKeyEnv)
 	}
 
-	body := map[string]any{
-		"model":       defaultString(req.Model, p.cfg.DefaultModel),
-		"messages":    req.Messages,
-		"temperature": req.Temperature,
+	opts := []option.RequestOption{
+		option.WithAPIKey(apiKey),
+		option.WithHTTPClient(p.client),
 	}
-	if req.MaxOutputTokens > 0 {
-		body["max_tokens"] = req.MaxOutputTokens
+	if p.cfg.BaseURL != "" {
+		opts = append(opts, option.WithBaseURL(p.cfg.BaseURL))
 	}
-	if len(req.Tools) > 0 {
-		body["tools"] = req.Tools
-	}
-	encoded, err := json.Marshal(body)
-	if err != nil {
-		return ChatResponse{}, err
-	}
+	client := openai.NewClient(opts...)
+	return &client, nil
+}
 
-	baseURL := strings.TrimRight(p.cfg.BaseURL, "/")
-	if baseURL == "" {
-		return ChatResponse{Provider: p.ID(), Model: req.Model, RawError: "missing base_url"}, fmt.Errorf("missing base_url")
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+openAIChatCompletionsPath, bytes.NewReader(encoded))
-	if err != nil {
-		return ChatResponse{}, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-
-	resp, err := p.client.Do(httpReq)
+func (p *OpenAICompatible) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	client, err := p.openaiClient()
 	if err != nil {
 		return ChatResponse{Provider: p.ID(), Model: req.Model, RawError: err.Error()}, err
 	}
-	defer resp.Body.Close()
 
-	var payload openAIChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return ChatResponse{Provider: p.ID(), Model: req.Model, RawError: "decode response failed"}, err
+	model := defaultString(req.Model, p.cfg.DefaultModel)
+	openaiMessages := openaiMessagesFromChat(req)
+	params := openai.ChatCompletionNewParams{
+		Model:    openai.ChatModel(model),
+		Messages: openaiMessages,
 	}
-	if resp.StatusCode >= http.StatusBadRequest {
-		msg := SanitizeError(payload.Error.Message)
-		return ChatResponse{Provider: p.ID(), Model: req.Model, RawError: msg}, fmt.Errorf("provider returned %s: %s", resp.Status, msg)
+	if req.Temperature > 0 {
+		params.Temperature = openai.Float(req.Temperature)
 	}
-	if len(payload.Choices) == 0 {
-		return ChatResponse{Provider: p.ID(), Model: req.Model, RawError: "empty choices"}, fmt.Errorf("empty provider response")
+	if req.MaxOutputTokens > 0 {
+		params.MaxTokens = openai.Int(int64(req.MaxOutputTokens))
+	}
+	if len(req.Tools) > 0 {
+		params.Tools = openaiToolsFromChat(req.Tools)
 	}
 
-	text := payload.Choices[0].Message.Content
-	inputTokens := payload.Usage.PromptTokens
-	outputTokens := payload.Usage.CompletionTokens
+	resp, err := client.Chat.Completions.New(ctx, params)
+	if err != nil {
+		return ChatResponse{Provider: p.ID(), Model: req.Model, RawError: err.Error()}, err
+	}
+
+	text := ""
+	if len(resp.Choices) > 0 {
+		text = resp.Choices[0].Message.Content
+	}
+
+	inputTokens := int(resp.Usage.PromptTokens)
+	outputTokens := int(resp.Usage.CompletionTokens)
 	if inputTokens == 0 {
 		inputTokens = EstimateMessagesTokens(req.Messages)
 	}
@@ -89,8 +80,17 @@ func (p *OpenAICompatible) Chat(ctx context.Context, req ChatRequest) (ChatRespo
 	}
 
 	var toolCalls []ToolCall
-	if len(payload.Choices[0].Message.ToolCalls) > 0 {
-		toolCalls = payload.Choices[0].Message.ToolCalls
+	if len(resp.Choices) > 0 {
+		for _, tc := range resp.Choices[0].Message.ToolCalls {
+			toolCalls = append(toolCalls, ToolCall{
+				ID:   tc.ID,
+				Type: string(tc.Type),
+				Function: ToolCallFunction{
+					Name:      tc.Function.Name,
+					Arguments: tc.Function.Arguments,
+				},
+			})
+		}
 	}
 
 	return ChatResponse{
@@ -105,151 +105,66 @@ func (p *OpenAICompatible) Chat(ctx context.Context, req ChatRequest) (ChatRespo
 }
 
 func (p *OpenAICompatible) ChatStream(ctx context.Context, req ChatRequest) (<-chan StreamChunk, error) {
-	apiKey := os.Getenv(p.cfg.APIKeyEnv)
-	if p.cfg.APIKeyEnv != "" && apiKey == "" {
-		return nil, fmt.Errorf("missing api key env %s", p.cfg.APIKeyEnv)
+	client, err := p.openaiClient()
+	if err != nil {
+		return nil, err
 	}
 
-	body := map[string]any{
-		"model":       defaultString(req.Model, p.cfg.DefaultModel),
-		"messages":    req.Messages,
-		"temperature": req.Temperature,
-		"stream":      true,
+	model := defaultString(req.Model, p.cfg.DefaultModel)
+	openaiMessages := openaiMessagesFromChat(req)
+	params := openai.ChatCompletionNewParams{
+		Model:    openai.ChatModel(model),
+		Messages: openaiMessages,
+	}
+	if req.Temperature > 0 {
+		params.Temperature = openai.Float(req.Temperature)
 	}
 	if req.MaxOutputTokens > 0 {
-		body["max_tokens"] = req.MaxOutputTokens
+		params.MaxTokens = openai.Int(int64(req.MaxOutputTokens))
 	}
 	if len(req.Tools) > 0 {
-		body["tools"] = req.Tools
+		params.Tools = openaiToolsFromChat(req.Tools)
 	}
 
-	encoded, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-
-	baseURL := strings.TrimRight(p.cfg.BaseURL, "/")
-	if baseURL == "" {
-		return nil, fmt.Errorf("missing base_url")
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+openAIChatCompletionsPath, bytes.NewReader(encoded))
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		defer resp.Body.Close()
-		var payload openAIChatResponse
-		_ = json.NewDecoder(resp.Body).Decode(&payload)
-		return nil, fmt.Errorf("provider returned %s: %s", resp.Status, payload.Error.Message)
-	}
-
+	stream := client.Chat.Completions.NewStreaming(ctx, params)
 	ch := make(chan StreamChunk, 32)
+
 	go func() {
-		defer resp.Body.Close()
 		defer close(ch)
+		acc := openai.ChatCompletionAccumulator{}
+		for stream.Next() {
+			chunk := stream.Current()
+			acc.AddChunk(chunk)
 
-		reader := bufio.NewReader(resp.Body)
-		var toolBuilders []struct {
-			id   string
-			name string
-			args strings.Builder
-		}
-
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err != io.EOF {
-					ch <- StreamChunk{Error: err.Error()}
-				}
-				break
-			}
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			if !strings.HasPrefix(line, "data: ") {
-				continue
-			}
-			data := strings.TrimPrefix(line, "data: ")
-			if data == "[DONE]" {
-				break
-			}
-
-			var chunk struct {
-				Choices []struct {
-					Delta struct {
-						Content   string `json:"content"`
-						ToolCalls []struct {
-							Index    int    `json:"index"`
-							ID       string `json:"id"`
-							Type     string `json:"type"`
-							Function struct {
-								Name      string `json:"name"`
-								Arguments string `json:"arguments"`
-							} `json:"function"`
-						} `json:"tool_calls"`
-					} `json:"delta"`
-				} `json:"choices"`
-			}
-			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-				continue
-			}
-
-			if len(chunk.Choices) == 0 {
-				continue
-			}
-
-			delta := chunk.Choices[0].Delta
-			if delta.Content != "" {
-				ch <- StreamChunk{Text: delta.Content}
-			}
-
-			for _, tc := range delta.ToolCalls {
-				for len(toolBuilders) <= tc.Index {
-					toolBuilders = append(toolBuilders, struct {
-						id   string
-						name string
-						args strings.Builder
-					}{})
-				}
-				if tc.ID != "" {
-					toolBuilders[tc.Index].id = tc.ID
-				}
-				if tc.Function.Name != "" {
-					toolBuilders[tc.Index].name = tc.Function.Name
-				}
-				if tc.Function.Arguments != "" {
-					toolBuilders[tc.Index].args.WriteString(tc.Function.Arguments)
+			if len(chunk.Choices) > 0 {
+				delta := chunk.Choices[0].Delta
+				if delta.Content != "" {
+					ch <- StreamChunk{Text: delta.Content}
 				}
 			}
 		}
 
-		var finalToolCalls []ToolCall
-		for _, b := range toolBuilders {
-			if b.name != "" || b.id != "" {
-				finalToolCalls = append(finalToolCalls, ToolCall{
-					ID:   b.id,
-					Type: "function",
-					Function: ToolCallFunction{
-						Name:      b.name,
-						Arguments: b.args.String(),
-					},
-				})
-			}
+		if err := stream.Err(); err != nil {
+			ch <- StreamChunk{Error: err.Error()}
+			return
 		}
-		if len(finalToolCalls) > 0 {
-			ch <- StreamChunk{ToolCalls: finalToolCalls}
+
+		if len(acc.Choices) > 0 {
+			msg := acc.Choices[0].Message
+			if len(msg.ToolCalls) > 0 {
+				var tcList []ToolCall
+				for _, tc := range msg.ToolCalls {
+					tcList = append(tcList, ToolCall{
+						ID:   tc.ID,
+						Type: string(tc.Type),
+						Function: ToolCallFunction{
+							Name:      tc.Function.Name,
+							Arguments: tc.Function.Arguments,
+						},
+					})
+				}
+				ch <- StreamChunk{ToolCalls: tcList}
+			}
 		}
 		ch <- StreamChunk{Done: true}
 	}()
@@ -258,65 +173,32 @@ func (p *OpenAICompatible) ChatStream(ctx context.Context, req ChatRequest) (<-c
 }
 
 func (p *OpenAICompatible) Embed(ctx context.Context, text string) ([]float32, error) {
-	apiKey := os.Getenv(p.cfg.APIKeyEnv)
-	if p.cfg.APIKeyEnv != "" && apiKey == "" {
-		return nil, fmt.Errorf("missing api key env %s", p.cfg.APIKeyEnv)
-	}
-
-	body := map[string]any{
-		"model": defaultString(p.cfg.EmbedModel, config.DefaultEmbedModel),
-		"input": text,
-	}
-
-	encoded, err := json.Marshal(body)
+	client, err := p.openaiClient()
 	if err != nil {
 		return nil, err
 	}
 
-	baseURL := strings.TrimRight(p.cfg.BaseURL, "/")
-	if baseURL == "" {
-		return nil, fmt.Errorf("missing base_url")
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/v1/embeddings", bytes.NewReader(encoded))
+	model := defaultString(p.cfg.EmbedModel, config.DefaultEmbedModel)
+	resp, err := client.Embeddings.New(ctx, openai.EmbeddingNewParams{
+		Input: openai.EmbeddingNewParamsInputUnion{
+			OfString: openai.String(text),
+		},
+		Model: openai.EmbeddingModel(model),
+	})
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-	}
 
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		var payload struct {
-			Error struct {
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		_ = json.NewDecoder(resp.Body).Decode(&payload)
-		return nil, fmt.Errorf("provider returned %s: %s", resp.Status, payload.Error.Message)
-	}
-
-	var payload struct {
-		Data []struct {
-			Embedding []float32 `json:"embedding"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, err
-	}
-
-	if len(payload.Data) == 0 {
+	if len(resp.Data) == 0 {
 		return nil, fmt.Errorf("empty embedding data returned")
 	}
 
-	return payload.Data[0].Embedding, nil
+	values := make([]float32, len(resp.Data[0].Embedding))
+	for i, v := range resp.Data[0].Embedding {
+		values[i] = float32(v)
+	}
+
+	return values, nil
 }
 
 func (p *OpenAICompatible) EstimateCost(req ChatRequest) CostEstimate {
@@ -329,15 +211,73 @@ func (p *OpenAICompatible) EstimateCost(req ChatRequest) CostEstimate {
 	}
 }
 
-type openAIChatResponse struct {
-	Choices []struct {
-		Message Message `json:"message"`
-	} `json:"choices"`
-	Usage struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-	} `json:"usage"`
-	Error struct {
-		Message string `json:"message"`
-	} `json:"error"`
+func openaiMessagesFromChat(req ChatRequest) []openai.ChatCompletionMessageParamUnion {
+	var out []openai.ChatCompletionMessageParamUnion
+	for _, msg := range req.Messages {
+		switch msg.Role {
+		case "system":
+			out = append(out, openai.ChatCompletionMessageParamUnion{
+				OfSystem: &openai.ChatCompletionSystemMessageParam{
+					Content: openai.ChatCompletionSystemMessageParamContentUnion{
+						OfString: openai.String(msg.Content),
+					},
+				},
+			})
+		case "user":
+			out = append(out, openai.ChatCompletionMessageParamUnion{
+				OfUser: &openai.ChatCompletionUserMessageParam{
+					Content: openai.ChatCompletionUserMessageParamContentUnion{
+						OfString: openai.String(msg.Content),
+					},
+				},
+			})
+		case "assistant":
+			var assistantMsg openai.ChatCompletionAssistantMessageParam
+			if msg.Content != "" {
+				assistantMsg.Content = openai.ChatCompletionAssistantMessageParamContentUnion{
+					OfString: openai.String(msg.Content),
+				}
+			}
+			if len(msg.ToolCalls) > 0 {
+				var tcParams []openai.ChatCompletionMessageToolCallParam
+				for _, tc := range msg.ToolCalls {
+					tcParams = append(tcParams, openai.ChatCompletionMessageToolCallParam{
+						ID: tc.ID,
+						Function: openai.ChatCompletionMessageToolCallFunctionParam{
+							Name:      tc.Function.Name,
+							Arguments: tc.Function.Arguments,
+						},
+					})
+				}
+				assistantMsg.ToolCalls = tcParams
+			}
+			out = append(out, openai.ChatCompletionMessageParamUnion{
+				OfAssistant: &assistantMsg,
+			})
+		case "tool":
+			out = append(out, openai.ChatCompletionMessageParamUnion{
+				OfTool: &openai.ChatCompletionToolMessageParam{
+					ToolCallID: msg.ToolCallID,
+					Content: openai.ChatCompletionToolMessageParamContentUnion{
+						OfString: openai.String(msg.Content),
+					},
+				},
+			})
+		}
+	}
+	return out
+}
+
+func openaiToolsFromChat(tools []ToolDefinition) []openai.ChatCompletionToolParam {
+	var out []openai.ChatCompletionToolParam
+	for _, tool := range tools {
+		out = append(out, openai.ChatCompletionToolParam{
+			Function: shared.FunctionDefinitionParam{
+				Name:        tool.Function.Name,
+				Description: openai.String(tool.Function.Description),
+				Parameters:  shared.FunctionParameters(tool.Function.Parameters),
+			},
+		})
+	}
+	return out
 }

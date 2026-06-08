@@ -290,6 +290,7 @@ func (s *Service) chatWithFallback(ctx context.Context, req providers.ChatReques
 		if err == nil {
 			return resp, selection, excluded, nil
 		}
+		s.logf("provider %s chat error: %v", selection.Provider.ID(), err)
 		excluded = append(excluded, selection.Provider.ID())
 		next, fallbackErr := s.router.Select(ctx, req, excluded)
 		if fallbackErr != nil {
@@ -309,6 +310,7 @@ func (s *Service) streamWithFallback(ctx context.Context, out chan<- providers.S
 	for {
 		streamCh, err := selection.Provider.ChatStream(ctx, req)
 		if err != nil {
+			s.logf("provider %s stream init error: %v", selection.Provider.ID(), err)
 			excluded = append(excluded, selection.Provider.ID())
 			next, fallbackErr := s.router.Select(ctx, req, excluded)
 			if fallbackErr != nil {
@@ -338,6 +340,7 @@ func (s *Service) streamWithFallback(ctx context.Context, out chan<- providers.S
 			return attempt, selection, excluded, nil
 		}
 
+		s.logf("provider %s stream generation error: %s", selection.Provider.ID(), failed)
 		excluded = append(excluded, selection.Provider.ID())
 		next, fallbackErr := s.router.Select(ctx, req, excluded)
 		if fallbackErr != nil {

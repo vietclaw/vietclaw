@@ -2,6 +2,7 @@ package agent
 
 import (
 	"database/sql"
+	"log"
 
 	"vietclaw/internal/config"
 	contextbuilder "vietclaw/internal/context"
@@ -19,18 +20,33 @@ type Service struct {
 	router  *router.ModelRouter
 	context *contextbuilder.Builder
 	tools   *tools.ToolRegistry
+	Logger  *log.Logger
 }
 
 func NewService(cfg config.Config, db *sql.DB) *Service {
 	mem := memory.NewStore(db)
 	providerList := providers.Enabled(cfg.Providers)
+	r := router.NewModelRouter(cfg, db, providerList)
 	return &Service{
 		cfg:     cfg,
 		db:      db,
 		mem:     mem,
-		router:  router.NewModelRouter(cfg, db, providerList),
-		context: contextbuilder.New(cfg, db, mem),
+		router:  r,
+		context: contextbuilder.New(cfg, db, mem).WithRouter(r),
 		tools:   tools.NewRegistry(cfg),
+	}
+}
+
+func (s *Service) WithLogger(logger *log.Logger) *Service {
+	s.Logger = logger
+	return s
+}
+
+func (s *Service) logf(format string, args ...any) {
+	if s.Logger != nil {
+		s.Logger.Printf(format, args...)
+	} else {
+		log.Printf(format, args...)
 	}
 }
 

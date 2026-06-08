@@ -67,7 +67,7 @@ func runDaemon() error {
 		ConfigFile: paths.ConfigFile,
 		LogFile:    paths.LogFile,
 	}
-	application.Agent = agent.NewService(cfg, database)
+	application.Agent = agent.NewService(cfg, database).WithLogger(logger)
 	application.Channels = newChannelManager(cfg, application.Agent, database, logger)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

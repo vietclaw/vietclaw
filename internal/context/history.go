@@ -2,6 +2,7 @@ package contextbuilder
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 )
 
@@ -33,5 +34,14 @@ LIMIT ?`, sessionID, limit)
 	for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
 		lines[i], lines[j] = lines[j], lines[i]
 	}
-	return trimTo(strings.Join(lines, "\n"), b.cfg.Agent.MaxContextChars/2)
+
+	historyText := strings.Join(lines, "\n")
+
+	var summary sql.NullString
+	_ = b.db.QueryRowContext(ctx, "SELECT summary FROM sessions WHERE id = ?", sessionID).Scan(&summary)
+	if summary.Valid && summary.String != "" {
+		historyText = "Tóm tắt hội thoại trước đó: " + summary.String + "\n\n" + historyText
+	}
+
+	return trimTo(historyText, b.cfg.Agent.MaxContextChars/2)
 }
