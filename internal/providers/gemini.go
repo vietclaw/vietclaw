@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -68,14 +69,41 @@ func (p *Gemini) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error
 		genConfig.SystemInstruction = systemInstruction
 	}
 
+	if len(req.Tools) > 0 {
+		tools, err := geminiToolsFromChat(req.Tools)
+		if err != nil {
+			return ChatResponse{Provider: p.ID(), Model: req.Model, RawError: err.Error()}, err
+		}
+		genConfig.Tools = tools
+	}
+
 	resp, err := client.Models.GenerateContent(ctx, model, contents, genConfig)
 	if err != nil {
 		return ChatResponse{Provider: p.ID(), Model: req.Model, RawError: err.Error()}, err
 	}
 
 	text := ""
-	if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
-		text = resp.Candidates[0].Content.Parts[0].Text
+	var toolCalls []ToolCall
+	if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
+		for _, part := range resp.Candidates[0].Content.Parts {
+			if part.Text != "" {
+				if text != "" {
+					text += "\n"
+				}
+				text += part.Text
+			}
+			if part.FunctionCall != nil {
+				argsBytes, _ := json.Marshal(part.FunctionCall.Args)
+				toolCalls = append(toolCalls, ToolCall{
+					ID:   part.FunctionCall.ID,
+					Type: "function",
+					Function: ToolCallFunction{
+						Name:      part.FunctionCall.Name,
+						Arguments: string(argsBytes),
+					},
+				})
+			}
+		}
 	}
 
 	inputTokens := int(resp.UsageMetadata.PromptTokenCount)
@@ -94,6 +122,7 @@ func (p *Gemini) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error
 		InputTokens:      inputTokens,
 		OutputTokens:     outputTokens,
 		EstimatedCostUSD: EstimateCostUSD(inputTokens, outputTokens, p.cfg),
+		ToolCalls:        toolCalls,
 	}, nil
 }
 
@@ -123,6 +152,14 @@ func (p *Gemini) ChatStream(ctx context.Context, req ChatRequest) (<-chan Stream
 		genConfig.SystemInstruction = systemInstruction
 	}
 
+	if len(req.Tools) > 0 {
+		tools, err := geminiToolsFromChat(req.Tools)
+		if err != nil {
+			return nil, err
+		}
+		genConfig.Tools = tools
+	}
+
 	ch := make(chan StreamChunk, 32)
 	go func() {
 		defer close(ch)
@@ -131,12 +168,32 @@ func (p *Gemini) ChatStream(ctx context.Context, req ChatRequest) (<-chan Stream
 				ch <- StreamChunk{Error: err.Error()}
 				return
 			}
-			text := result.Text()
-			if text == "" && len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
-				text = result.Candidates[0].Content.Parts[0].Text
+			
+			var chunkText string
+			var chunkToolCalls []ToolCall
+			if len(result.Candidates) > 0 && result.Candidates[0].Content != nil {
+				for _, part := range result.Candidates[0].Content.Parts {
+					if part.Text != "" {
+						chunkText += part.Text
+					}
+					if part.FunctionCall != nil {
+						argsBytes, _ := json.Marshal(part.FunctionCall.Args)
+						chunkToolCalls = append(chunkToolCalls, ToolCall{
+							ID:   part.FunctionCall.ID,
+							Type: "function",
+							Function: ToolCallFunction{
+								Name:      part.FunctionCall.Name,
+								Arguments: string(argsBytes),
+							},
+						})
+					}
+				}
 			}
-			if text != "" {
-				ch <- StreamChunk{Text: text}
+			if chunkText != "" {
+				ch <- StreamChunk{Text: chunkText}
+			}
+			if len(chunkToolCalls) > 0 {
+				ch <- StreamChunk{ToolCalls: chunkToolCalls}
 			}
 		}
 		ch <- StreamChunk{Done: true}
@@ -192,14 +249,43 @@ func geminiContentsFromChat(req ChatRequest) []*genai.Content {
 			continue
 		}
 		role := "user"
+		var parts []*genai.Part
 		if msg.Role == "assistant" {
 			role = "model"
+			if msg.Content != "" {
+				parts = append(parts, &genai.Part{Text: msg.Content})
+			}
+			for _, tc := range msg.ToolCalls {
+				var args map[string]any
+				if tc.Function.Arguments != "" {
+					_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
+				}
+				parts = append(parts, &genai.Part{
+					FunctionCall: &genai.FunctionCall{
+						ID:   tc.ID,
+						Name: tc.Function.Name,
+						Args: args,
+					},
+				})
+			}
+		} else if msg.Role == "tool" {
+			role = "user"
+			parts = append(parts, &genai.Part{
+				FunctionResponse: &genai.FunctionResponse{
+					ID:   msg.ToolCallID,
+					Name: msg.Name,
+					Response: map[string]any{
+						"result": msg.Content,
+					},
+				},
+			})
+		} else {
+			// user
+			parts = append(parts, &genai.Part{Text: msg.Content})
 		}
 		contents = append(contents, &genai.Content{
-			Role: role,
-			Parts: []*genai.Part{
-				{Text: msg.Content},
-			},
+			Role:  role,
+			Parts: parts,
 		})
 	}
 	return contents
@@ -218,4 +304,33 @@ func systemInstructionFromChat(req ChatRequest) *genai.Content {
 	return &genai.Content{
 		Parts: systemParts,
 	}
+}
+
+func geminiToolsFromChat(tools []ToolDefinition) ([]*genai.Tool, error) {
+	if len(tools) == 0 {
+		return nil, nil
+	}
+	var decls []*genai.FunctionDeclaration
+	for _, t := range tools {
+		var schema *genai.Schema
+		if len(t.Function.Parameters) > 0 {
+			data, err := json.Marshal(t.Function.Parameters)
+			if err != nil {
+				return nil, err
+			}
+			var s genai.Schema
+			if err := json.Unmarshal(data, &s); err != nil {
+				return nil, err
+			}
+			schema = &s
+		}
+		decls = append(decls, &genai.FunctionDeclaration{
+			Name:        t.Function.Name,
+			Description: t.Function.Description,
+			Parameters:  schema,
+		})
+	}
+	return []*genai.Tool{
+		{FunctionDeclarations: decls},
+	}, nil
 }
