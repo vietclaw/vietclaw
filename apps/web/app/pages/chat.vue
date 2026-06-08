@@ -5,4 +5,3 @@ definePageMeta({ title: 'Chat' })
 <template>
   <ChatPanel />
 </template>
-

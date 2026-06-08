@@ -31,6 +31,6 @@ export function formatMoney(value?: number): string {
 }
 
 export function statusTone(ok?: boolean): string {
-  return ok ? 'text-[var(--vc-good)]' : 'text-[var(--vc-warn)]'
+  return ok ? 'text-[var(--success)]' : 'text-[var(--warning)]'
 }
 
