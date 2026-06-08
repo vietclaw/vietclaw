@@ -1,4 +1,4 @@
-package router
+package router_test
 
 import (
 	"context"
@@ -8,18 +8,19 @@ import (
 	"vietclaw/internal/config"
 	"vietclaw/internal/db"
 	"vietclaw/internal/providers"
+	"vietclaw/internal/router"
 )
 
 func TestClassify(t *testing.T) {
-	tests := map[string]Intent{
-		"nhớ là server chính dùng Docker": IntentMemoryAdd,
-		"mày nhớ gì về server chính":      IntentMemoryQuery,
-		"chạy ls":                         IntentAction,
-		"mày là gì":                       IntentChat,
-		"":                                IntentUnknown,
+	tests := map[string]router.Intent{
+		"nhớ là server chính dùng Docker": router.IntentMemoryAdd,
+		"mày nhớ gì về server chính":      router.IntentMemoryQuery,
+		"chạy ls":                         router.IntentAction,
+		"mày là gì":                       router.IntentChat,
+		"":                                router.IntentUnknown,
 	}
 	for input, want := range tests {
-		if got := Classify(input); got != want {
+		if got := router.Classify(input); got != want {
 			t.Fatalf("Classify(%q) = %s, want %s", input, got, want)
 		}
 	}
@@ -49,7 +50,7 @@ func TestBudgetRequiresApproval(t *testing.T) {
 	cfg.Router.DefaultModel = "paid-small"
 	cfg.Budget.RequireApprovalAboveUSD = 0.01
 
-	r := NewModelRouter(cfg, database, providers.Enabled(cfg.Providers))
+	r := router.NewModelRouter(cfg, database, providers.Enabled(cfg.Providers))
 	_, err = r.Select(context.Background(), providers.ChatRequest{
 		Messages:        []providers.Message{{Role: "user", Content: "hello"}},
 		MaxOutputTokens: 512,

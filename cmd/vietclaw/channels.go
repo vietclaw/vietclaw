@@ -48,7 +48,7 @@ func setChannelEnabled(name string, enabled bool, command string) error {
 	}
 	switch name {
 	case channelDiscord, channelTelegram:
-		updated, err := updateChannelEnabled(cfg, name, enabled)
+		updated, err := config.UpdateChannelEnabled(cfg, name, enabled)
 		if err != nil {
 			return err
 		}
@@ -67,18 +67,6 @@ func setChannelEnabled(name string, enabled bool, command string) error {
 		}
 	}
 	return nil
-}
-
-func updateChannelEnabled(cfg config.Config, name string, enabled bool) (config.Config, error) {
-	switch name {
-	case channelDiscord:
-		cfg.Channels.Discord.Enabled = enabled
-	case channelTelegram:
-		cfg.Channels.Telegram.Enabled = enabled
-	default:
-		return cfg, fmt.Errorf("unknown channel %q", name)
-	}
-	return cfg, nil
 }
 
 func printChannelStatus(name string, enabled bool, tokenEnv string) {

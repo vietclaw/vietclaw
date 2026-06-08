@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"strings"
 
+	"vietclaw/internal/i18n"
 	"vietclaw/internal/router"
 )
-
-const actionBlockedReply = "tool action cần policy rõ hơn. shell.exec đang tắt mặc định nếu chưa bật trong config."
 
 func (s *Service) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
 	req = normalizeRequest(req, s.cfg)
 	if strings.TrimSpace(req.Message) == "" {
+		errText := s.text(i18n.AgentMessageRequired)
 		return ChatResponse{
 			OK:        false,
 			SessionID: req.SessionID,
 			Intent:    string(router.IntentUnknown),
-			Error:     "message is required",
-		}, fmt.Errorf("message is required")
+			Error:     errText,
+		}, fmt.Errorf("%s", errText)
 	}
 
 	if err := s.ensureSession(ctx, req); err != nil {
@@ -40,13 +40,14 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest) (ChatResponse, erro
 	case router.IntentMemoryQuery:
 		return s.handleMemoryQuery(ctx, req, runID, intent)
 	case router.IntentAction:
-		_ = s.addMessage(ctx, req.SessionID, RoleAssistant, actionBlockedReply)
+		reply := s.text(i18n.AgentActionBlocked)
+		_ = s.addMessage(ctx, req.SessionID, RoleAssistant, reply)
 		_ = s.finishRun(ctx, runID, RunStatusBlocked, "tool policy blocked", ProviderLocal, ModelRule)
 		return ChatResponse{
 			OK:        true,
 			SessionID: req.SessionID,
 			Intent:    string(intent),
-			Reply:     actionBlockedReply,
+			Reply:     reply,
 			Provider:  ProviderLocal,
 			Model:     ModelRule,
 		}, nil

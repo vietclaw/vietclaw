@@ -12,6 +12,7 @@ import (
 
 	"vietclaw/internal/channels"
 	"vietclaw/internal/config"
+	"vietclaw/internal/i18n"
 )
 
 type Adapter struct {
@@ -24,7 +25,7 @@ func New(cfg config.TelegramConfig, handler *channels.Handler) *Adapter {
 }
 
 func (a *Adapter) Name() string {
-	return "telegram"
+	return channels.PlatformTelegram
 }
 
 func (a *Adapter) Start(ctx context.Context) error {
@@ -68,7 +69,7 @@ func (a *Adapter) handleMessage(ctx context.Context, bot *tgbotapi.BotAPI, msg *
 	isReplyToBot := msg.ReplyToMessage != nil && msg.ReplyToMessage.From != nil && msg.ReplyToMessage.From.ID == bot.Self.ID
 
 	inbound := channels.InboundMessage{
-		Platform:     "telegram",
+		Platform:     channels.PlatformTelegram,
 		MessageID:    strconv.Itoa(msg.MessageID),
 		ChatID:       chatID,
 		UserID:       strconv.FormatInt(msg.From.ID, 10),
@@ -89,12 +90,12 @@ func (a *Adapter) handleMessage(ctx context.Context, bot *tgbotapi.BotAPI, msg *
 	_, _ = bot.Send(typing)
 
 	_ = a.handler.Handle(ctx, inbound, channels.TelegramPolicy(a.cfg), []string{botUsername}, func(sendCtx context.Context, replyTo channels.InboundMessage, reply string) error {
-		return sendChunks(sendCtx, bot, msg, reply)
+		return sendChunks(sendCtx, bot, msg, reply, a.handler.Text(i18n.ChannelEmptyPrompt))
 	})
 }
 
-func sendChunks(ctx context.Context, bot *tgbotapi.BotAPI, replyTo *tgbotapi.Message, text string) error {
-	for _, chunk := range chunks(text, 3900) {
+func sendChunks(ctx context.Context, bot *tgbotapi.BotAPI, replyTo *tgbotapi.Message, text, fallback string) error {
+	for _, chunk := range chunks(text, fallback, 3900) {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -111,10 +112,10 @@ func sendChunks(ctx context.Context, bot *tgbotapi.BotAPI, replyTo *tgbotapi.Mes
 	return nil
 }
 
-func chunks(text string, limit int) []string {
+func chunks(text, fallback string, limit int) []string {
 	runes := []rune(strings.TrimSpace(text))
 	if len(runes) == 0 {
-		return []string{"gọi t rồi muốn t làm gì?"}
+		return []string{fallback}
 	}
 	var out []string
 	for len(runes) > 0 {

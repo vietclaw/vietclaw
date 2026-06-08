@@ -25,9 +25,10 @@ func (s *Service) handleProviderChat(ctx context.Context, req ChatRequest, runID
 		Temperature:     defaultTemperature,
 		MaxOutputTokens: defaultMaxOutputTokens,
 		Metadata: map[string]any{
-			"user_id": req.UserID,
-			"channel": req.Channel,
-			"mode":    req.Mode,
+			"user_id":  req.UserID,
+			"channel":  req.Channel,
+			"mode":     req.Mode,
+			"language": s.Language(),
 		},
 	}
 	selection, err := s.router.Select(ctx, chatReq)

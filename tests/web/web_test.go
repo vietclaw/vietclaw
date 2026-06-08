@@ -1,4 +1,4 @@
-package web
+package web_test
 
 import (
 	"bytes"
@@ -18,6 +18,7 @@ import (
 	"vietclaw/internal/db"
 	"vietclaw/internal/memory"
 	"vietclaw/internal/version"
+	"vietclaw/internal/web"
 )
 
 func TestAPIChatMemoryAddDoesNotCallProvider(t *testing.T) {
@@ -39,7 +40,7 @@ func TestAPIChatMemoryAddDoesNotCallProvider(t *testing.T) {
 	body := bytes.NewBufferString(`{"user_id":"local","channel":"web","message":"nhớ là server chính dùng Docker"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/chat", body)
 	rec := httptest.NewRecorder()
-	NewRouter(application).ServeHTTP(rec, req)
+	web.NewRouter(application).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
@@ -68,7 +69,7 @@ func TestStaticFallbackServesAppRoutes(t *testing.T) {
 	application := testApp(t)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/chat", nil)
-	NewRouter(application).ServeHTTP(rec, req)
+	web.NewRouter(application).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
@@ -82,7 +83,7 @@ func TestAPIRouteNotSwallowedByStaticFallback(t *testing.T) {
 	application := testApp(t)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/does-not-exist", nil)
-	NewRouter(application).ServeHTTP(rec, req)
+	web.NewRouter(application).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d", rec.Code)

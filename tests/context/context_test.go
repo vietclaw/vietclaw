@@ -1,4 +1,4 @@
-package contextbuilder
+package context_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"vietclaw/internal/config"
+	contextbuilder "vietclaw/internal/context"
 	"vietclaw/internal/db"
 	"vietclaw/internal/memory"
 )
@@ -32,7 +33,7 @@ func TestBuilderLimitsContextChars(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	builder := New(cfg, database, store)
+	builder := contextbuilder.New(cfg, database, store)
 	messages, err := builder.Messages(context.Background(), "", "local", "token")
 	if err != nil {
 		t.Fatal(err)

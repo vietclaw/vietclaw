@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"vietclaw/internal/config"
+	"vietclaw/internal/i18n"
 	"vietclaw/internal/version"
 )
 
@@ -27,7 +29,7 @@ var (
 
 func main() {
 	if err := run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, i18n.T(config.DefaultAgentLanguage, i18n.CLIErrorPrefix), err)
 		os.Exit(1)
 	}
 }
@@ -70,5 +72,5 @@ func run(args []string) error {
 }
 
 func printUsage() {
-	fmt.Println("usage: vietclaw <version|init|daemon|status|doctor|chat|memory|channels|discord|telegram>")
+	fmt.Println(i18n.T(config.DefaultAgentLanguage, i18n.CLIUsage))
 }

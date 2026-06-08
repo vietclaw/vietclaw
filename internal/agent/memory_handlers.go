@@ -4,14 +4,9 @@ import (
 	"context"
 	"strings"
 
+	"vietclaw/internal/i18n"
 	"vietclaw/internal/memory"
 	"vietclaw/internal/router"
-)
-
-const (
-	memorySavedPrefix = "ok, t lưu: "
-	memoryFoundPrefix = "t nhớ: "
-	memoryNotFound    = "t chưa thấy memory nào khớp."
 )
 
 func (s *Service) handleMemoryAdd(ctx context.Context, req ChatRequest, runID string, intent router.Intent) (ChatResponse, error) {
@@ -27,7 +22,7 @@ func (s *Service) handleMemoryAdd(ctx context.Context, req ChatRequest, runID st
 		return ChatResponse{}, err
 	}
 
-	reply := memorySavedPrefix + rec.Content
+	reply := s.text(i18n.MemorySaved, rec.Content)
 	_ = s.addMessage(ctx, req.SessionID, RoleAssistant, reply)
 	_ = s.finishRun(ctx, runID, RunStatusCompleted, reply, ProviderLocal, ModelRule)
 	return ChatResponse{
@@ -48,13 +43,13 @@ func (s *Service) handleMemoryQuery(ctx context.Context, req ChatRequest, runID 
 		return ChatResponse{}, err
 	}
 
-	reply := memoryNotFound
+	reply := s.text(i18n.MemoryNotFound)
 	if len(records) > 0 {
 		parts := make([]string, 0, len(records))
 		for _, rec := range records {
 			parts = append(parts, rec.Content)
 		}
-		reply = memoryFoundPrefix + strings.Join(parts, "; ")
+		reply = s.text(i18n.MemoryFound, strings.Join(parts, "; "))
 	}
 	_ = s.addMessage(ctx, req.SessionID, RoleAssistant, reply)
 	_ = s.finishRun(ctx, runID, RunStatusCompleted, reply, ProviderLocal, ModelRule)

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"vietclaw/internal/agent"
+	"vietclaw/internal/config"
+	"vietclaw/internal/i18n"
 )
 
 const defaultIdempotencyTTL = 10 * time.Minute
@@ -47,7 +49,7 @@ func (h *Handler) Handle(ctx context.Context, msg InboundMessage, policy Policy,
 
 	prompt := strings.TrimSpace(msg.Text)
 	if prompt == "" {
-		prompt = EmptyPromptReply
+		prompt = h.text(i18n.ChannelEmptyPrompt)
 	}
 	sessionID := SessionKey(msg)
 	userID := UserIdentity(msg)
@@ -69,7 +71,7 @@ func (h *Handler) Handle(ctx context.Context, msg InboundMessage, policy Policy,
 	}
 	reply := strings.TrimSpace(resp.Reply)
 	if reply == "" {
-		reply = EmptyAgentReply
+		reply = h.text(i18n.ChannelEmptyAgentReply)
 	}
 	if err := send(ctx, msg, reply); err != nil {
 		if h.Log != nil {
@@ -82,6 +84,17 @@ func (h *Handler) Handle(ctx context.Context, msg InboundMessage, policy Policy,
 		h.Log.Printf("channel agent success platform=%s session=%s intent=%s", msg.Platform, sessionID, resp.Intent)
 	}
 	return nil
+}
+
+func (h *Handler) text(id i18n.MessageID, args ...any) string {
+	return h.Text(id, args...)
+}
+
+func (h *Handler) Text(id i18n.MessageID, args ...any) string {
+	if h.Agent == nil {
+		return i18n.T(config.DefaultAgentLanguage, id, args...)
+	}
+	return i18n.T(h.Agent.Language(), id, args...)
 }
 
 func (h *Handler) insertChannelMessage(ctx context.Context, msg InboundMessage, sessionID, userID, direction, content string) error {

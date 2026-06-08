@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vietclaw/internal/i18n"
 	"vietclaw/internal/memory"
 )
 
@@ -43,7 +44,7 @@ func runMemory(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("ok, t lưu: %s\n", rec.Content)
+		fmt.Println(i18n.T(service.Language(), i18n.CLIMemorySaved, rec.Content))
 		return nil
 	case "search":
 		if len(args) < 2 {

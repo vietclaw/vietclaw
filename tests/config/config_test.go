@@ -1,16 +1,21 @@
-package config
+package config_test
 
 import (
 	"path/filepath"
 	"testing"
+
+	"vietclaw/internal/config"
 )
 
 func TestDefaultIncludesAgentRuntime(t *testing.T) {
 	dir := t.TempDir()
-	cfg := Default(Paths{DataDir: dir})
+	cfg := config.Default(config.Paths{DataDir: dir})
 
 	if cfg.Agent.Name != "VietClaw" {
 		t.Fatalf("agent name = %q", cfg.Agent.Name)
+	}
+	if cfg.Agent.Language != config.DefaultAgentLanguage {
+		t.Fatalf("agent language = %q", cfg.Agent.Language)
 	}
 	if cfg.Agent.Workspace != filepath.Join(dir, "workspace") {
 		t.Fatalf("workspace = %q", cfg.Agent.Workspace)
@@ -36,15 +41,43 @@ func TestDefaultIncludesAgentRuntime(t *testing.T) {
 }
 
 func TestMergeDefaultKeepsExistingValues(t *testing.T) {
-	def := Default(Paths{DataDir: t.TempDir()})
-	cfg := Config{}
+	def := config.Default(config.Paths{DataDir: t.TempDir()})
+	cfg := config.Config{}
 	cfg.Server.Host = "0.0.0.0"
 
-	merged := MergeDefault(cfg, def)
+	merged := config.MergeDefault(cfg, def)
 	if merged.Server.Host != "0.0.0.0" {
 		t.Fatalf("existing host was overwritten: %s", merged.Server.Host)
 	}
 	if merged.Agent.MaxContextChars == 0 || len(merged.Providers) == 0 {
 		t.Fatalf("defaults were not merged: %#v", merged)
+	}
+}
+
+func TestUpdateChannelEnabledKeepsExistingConfig(t *testing.T) {
+	cfg := config.Default(config.Paths{DataDir: t.TempDir()})
+	cfg.Server.Port = 19000
+	cfg.Agent.Name = "CustomClaw"
+
+	updated, err := config.UpdateChannelEnabled(cfg, config.ChannelDiscord, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated.Channels.Discord.Enabled {
+		t.Fatal("discord was not enabled")
+	}
+	if updated.Channels.Telegram.Enabled {
+		t.Fatal("telegram should stay disabled")
+	}
+	if updated.Server.Port != 19000 || updated.Agent.Name != "CustomClaw" {
+		t.Fatalf("unrelated config changed: %#v", updated)
+	}
+
+	updated, err = config.UpdateChannelEnabled(updated, config.ChannelDiscord, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Channels.Discord.Enabled {
+		t.Fatal("discord was not disabled")
 	}
 }

@@ -5,11 +5,7 @@ import (
 	"strings"
 
 	"vietclaw/internal/config"
-)
-
-const (
-	mockDefaultReply = "t là VietClaw, agent runtime nhẹ để điều phối model, memory và tools."
-	mockMemoryReply  = "mock đây: t có thể lưu và tìm memory qua SQLite."
+	"vietclaw/internal/i18n"
 )
 
 type Mock struct {
@@ -22,11 +18,12 @@ func NewMock(cfg config.ProviderConfig) *Mock {
 }
 
 func (m *Mock) Chat(_ context.Context, req ChatRequest) (ChatResponse, error) {
-	text := mockDefaultReply
+	lang := metadataLanguage(req.Metadata)
+	text := i18n.T(lang, i18n.ProviderMockDefault)
 	if len(req.Messages) > 0 {
 		last := strings.ToLower(req.Messages[len(req.Messages)-1].Content)
 		if strings.Contains(last, "memory") || strings.Contains(last, "nhớ") {
-			text = mockMemoryReply
+			text = i18n.T(lang, i18n.ProviderMockMemory)
 		}
 	}
 	return ChatResponse{

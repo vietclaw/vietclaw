@@ -6,11 +6,6 @@ import (
 	"vietclaw/internal/config"
 )
 
-const (
-	EmptyPromptReply = "gọi t rồi muốn t làm gì?"
-	EmptyAgentReply  = "t chưa có gì để trả lời."
-)
-
 func ShouldHandle(msg InboundMessage, policy Policy) bool {
 	if msg.IsDM {
 		return policy.RespondInDM

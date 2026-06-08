@@ -5,6 +5,7 @@ import (
 
 	"vietclaw/internal/config"
 	contextbuilder "vietclaw/internal/context"
+	"vietclaw/internal/i18n"
 	"vietclaw/internal/memory"
 	"vietclaw/internal/providers"
 	"vietclaw/internal/router"
@@ -32,4 +33,12 @@ func NewService(cfg config.Config, db *sql.DB) *Service {
 
 func (s *Service) Memory() *memory.Store {
 	return s.mem
+}
+
+func (s *Service) Language() string {
+	return string(i18n.Normalize(s.cfg.Agent.Language))
+}
+
+func (s *Service) text(id i18n.MessageID, args ...any) string {
+	return i18n.T(s.cfg.Agent.Language, id, args...)
 }

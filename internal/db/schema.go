@@ -1,14 +1,5 @@
 package db
 
-import (
-	"database/sql"
-	"fmt"
-	"os"
-	"path/filepath"
-
-	_ "modernc.org/sqlite"
-)
-
 const schema = `
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
@@ -114,35 +105,3 @@ CREATE TABLE IF NOT EXISTS channel_events (
   created_at TEXT NOT NULL
 );
 `
-
-func Open(path string) (*sql.DB, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("create database dir: %w", err)
-	}
-
-	database, err := sql.Open("sqlite", path)
-	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
-	}
-
-	if err := database.Ping(); err != nil {
-		_ = database.Close()
-		return nil, fmt.Errorf("ping database: %w", err)
-	}
-
-	return database, nil
-}
-
-func ApplySchema(database *sql.DB) error {
-	if _, err := database.Exec(schema); err != nil {
-		return fmt.Errorf("apply schema: %w", err)
-	}
-	return nil
-}
-
-func Check(database *sql.DB) bool {
-	if database == nil {
-		return false
-	}
-	return database.Ping() == nil
-}

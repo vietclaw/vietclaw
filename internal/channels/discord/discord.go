@@ -11,6 +11,7 @@ import (
 
 	"vietclaw/internal/channels"
 	"vietclaw/internal/config"
+	"vietclaw/internal/i18n"
 )
 
 type Adapter struct {
@@ -23,7 +24,7 @@ func New(cfg config.DiscordConfig, handler *channels.Handler) *Adapter {
 }
 
 func (a *Adapter) Name() string {
-	return "discord"
+	return channels.PlatformDiscord
 }
 
 func (a *Adapter) Start(ctx context.Context) error {
@@ -76,7 +77,7 @@ func (a *Adapter) onMessage(ctx context.Context) func(*discordgo.Session, *disco
 		}
 
 		inbound := channels.InboundMessage{
-			Platform:     "discord",
+			Platform:     channels.PlatformDiscord,
 			MessageID:    msg.ID,
 			GuildID:      msg.GuildID,
 			ChannelID:    msg.ChannelID,
@@ -98,7 +99,8 @@ func (a *Adapter) onMessage(ctx context.Context) func(*discordgo.Session, *disco
 		_ = s.ChannelTyping(msg.ChannelID)
 		mentions := []string{"<@" + botID + ">", "<@!" + botID + ">"}
 		_ = a.handler.Handle(ctx, inbound, channels.DiscordPolicy(a.cfg), mentions, func(sendCtx context.Context, replyTo channels.InboundMessage, reply string) error {
-			return sendChunks(sendCtx, s, replyTo.ChannelID, replyTo.MessageID, reply)
+			fallback := a.handler.Text(i18n.ChannelEmptyPrompt)
+			return sendChunks(sendCtx, s, replyTo.ChannelID, replyTo.MessageID, reply, fallback)
 		})
 	}
 }
@@ -115,8 +117,8 @@ func mentionsUser(msg *discordgo.Message, userID string) bool {
 	return strings.Contains(msg.Content, "<@"+userID+">") || strings.Contains(msg.Content, "<@!"+userID+">")
 }
 
-func sendChunks(ctx context.Context, session *discordgo.Session, channelID, referenceID, text string) error {
-	for _, chunk := range chunks(text, 1900) {
+func sendChunks(ctx context.Context, session *discordgo.Session, channelID, referenceID, text, fallback string) error {
+	for _, chunk := range chunks(text, fallback, 1900) {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -133,10 +135,10 @@ func sendChunks(ctx context.Context, session *discordgo.Session, channelID, refe
 	return nil
 }
 
-func chunks(text string, limit int) []string {
+func chunks(text, fallback string, limit int) []string {
 	runes := []rune(strings.TrimSpace(text))
 	if len(runes) == 0 {
-		return []string{"gọi t rồi muốn t làm gì?"}
+		return []string{fallback}
 	}
 	var out []string
 	for len(runes) > 0 {
