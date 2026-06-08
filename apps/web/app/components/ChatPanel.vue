@@ -178,19 +178,12 @@ const messages = computed(() => session.value?.messages || [])
                   <span class="text-rose-300">{{ step.error }}</span>
                 </div>
 
-                <!-- Text (streamed) -->
-                <div
-                  v-else-if="step.type === 'text' && step.text"
-                  class="text-sm text-zinc-300 leading-relaxed prose prose-invert"
-                  v-html="renderMarkdown(step.text)"
-                  v-html-hook="highlightCode"
-                />
               </template>
             </div>
 
-            <!-- Final text response (if no steps or text accumulated outside steps) -->
+            <!-- Assistant text response -->
             <div
-              v-if="msg.text && msg.steps.filter(s => s.type === 'text').length === 0"
+              v-if="msg.text"
               class="px-4 py-3 rounded bg-zinc-950/40 border border-zinc-900 text-sm prose prose-invert"
               v-html="renderMarkdown(msg.text)"
               v-html-hook="highlightCode"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Terminal, Plus, Settings, ChevronRight, Trash2 } from '@lucide/vue'
+import { Terminal, Plus, Settings, ChevronRight, Trash2, X } from '@lucide/vue'
 
 defineProps<{ open: boolean }>()
 defineEmits<{ close: [] }>()

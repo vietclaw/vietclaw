@@ -2,7 +2,7 @@ import type { ChatResponse } from '~/types'
 import { apiFetch } from '~/utils/api'
 
 export type ChatStepEvent = {
-  type: 'text' | 'tool_call' | 'tool_result' | 'error' | 'done'
+  type: 'tool_call' | 'tool_result' | 'error' | 'done'
   text?: string
   toolName?: string
   toolInput?: string
@@ -175,7 +175,6 @@ async function sendMessage(text: string) {
               })
             } else if (parsed.text) {
               assistantMsg.text += parsed.text
-              assistantMsg.steps.push({ type: 'text', text: parsed.text })
             }
           } catch {}
           currentEvent = ''

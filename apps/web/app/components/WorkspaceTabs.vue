@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { MessageSquare, Database, Server, DollarSign, Radio, FileText } from '@lucide/vue'
+import { MessageSquare, Database, Server, DollarSign, Radio, FileText, History } from '@lucide/vue'
 
 const tabs = [
   { id: 'chat', label: 'Chat', icon: MessageSquare },
+  { id: 'sessions', label: 'Sessions', icon: History },
   { id: 'memory', label: 'Memory', icon: Database },
   { id: 'providers', label: 'Providers', icon: Server },
   { id: 'budget', label: 'Budget', icon: DollarSign },
@@ -35,6 +36,9 @@ const activeTab = ref<string>('chat')
     <div class="flex-1 overflow-hidden">
       <div v-if="activeTab === 'chat'" class="h-full">
         <ChatPanel />
+      </div>
+      <div v-else-if="activeTab === 'sessions'" class="h-full overflow-y-auto p-4 md:p-6 vc-scrollbar">
+        <SessionsView />
       </div>
       <div v-else-if="activeTab === 'memory'" class="h-full overflow-y-auto p-4 md:p-6 vc-scrollbar">
         <MemoryView />
