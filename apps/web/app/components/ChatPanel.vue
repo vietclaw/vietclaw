@@ -57,6 +57,15 @@ async function copyMessage(text: string) {
 
 const session = computed(() => currentSession())
 const messages = computed(() => session.value?.messages || [])
+
+watch(
+  () => messages.value.map(msg => `${msg.role}:${msg.text.length}:${msg.steps.length}`).join('|'),
+  async () => {
+    await nextTick()
+    scrollToBottom()
+  },
+  { flush: 'post' }
+)
 </script>
 
 <template>
@@ -149,36 +158,20 @@ const messages = computed(() => session.value?.messages || [])
           >
             <!-- Step-by-step execution -->
             <div v-if="msg.steps.length > 0" class="space-y-1.5">
-              <template v-for="(step, si) in msg.steps" :key="si">
-                <!-- Tool Call -->
-                <div
-                  v-if="step.type === 'tool_call'"
-                  class="flex items-center gap-2 px-3 py-1.5 rounded bg-amber-950/20 border border-amber-900/20 text-[11px]"
-                >
-                  <Wrench :size="12" class="text-amber-400 shrink-0" />
-                  <span class="text-amber-300 font-mono font-medium">{{ step.toolName }}</span>
-                  <span class="text-zinc-500 truncate">{{ step.toolInput }}</span>
-                </div>
-
-                <!-- Tool Result -->
-                <div
-                  v-else-if="step.type === 'tool_result'"
-                  class="flex items-start gap-2 px-3 py-1.5 rounded bg-emerald-950/20 border border-emerald-900/20 text-[11px]"
-                >
-                  <CheckCircle2 :size="12" class="text-emerald-400 shrink-0 mt-0.5" />
-                  <span class="text-emerald-300/80 font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto">{{ step.toolResult }}</span>
-                </div>
-
-                <!-- Error -->
-                <div
-                  v-else-if="step.type === 'error'"
-                  class="flex items-center gap-2 px-3 py-1.5 rounded bg-rose-950/20 border border-rose-900/20 text-[11px]"
-                >
-                  <AlertCircle :size="12" class="text-rose-400 shrink-0" />
-                  <span class="text-rose-300">{{ step.error }}</span>
-                </div>
-
-              </template>
+              <div
+                v-if="msg.steps.some(step => step.type === 'error')"
+                class="flex items-center gap-2 px-3 py-1.5 rounded bg-rose-950/20 border border-rose-900/20 text-[11px]"
+              >
+                <AlertCircle :size="12" class="text-rose-400 shrink-0" />
+                <span class="text-rose-300">{{ msg.steps.find(step => step.type === 'error')?.error }}</span>
+              </div>
+              <div
+                v-else-if="!msg.text"
+                class="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-950/40 border border-zinc-900 text-[11px] text-zinc-500"
+              >
+                <Wrench :size="12" class="text-zinc-500 shrink-0" />
+                <span>Đang chạy công cụ...</span>
+              </div>
             </div>
 
             <!-- Assistant text response -->

@@ -46,6 +46,8 @@ func handleAPIChatStream(application *app.App) http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
+		flusher.Flush()
 
 		ch, err := application.Agent.ChatStream(r.Context(), req)
 		if err != nil {

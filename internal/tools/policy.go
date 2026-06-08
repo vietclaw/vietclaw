@@ -29,7 +29,8 @@ func (p Policy) FileAllowed(path string) (string, error) {
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
 		return "", err
 	}
-	cleaned := filepath.Clean(path)
+	cleaned := filepath.Clean(strings.TrimSpace(path))
+	cleaned = normalizeWorkspaceAlias(cleaned)
 	if !filepath.IsAbs(cleaned) {
 		cleaned = filepath.Join(workspace, cleaned)
 	}
@@ -48,4 +49,15 @@ func (p Policy) FileAllowed(path string) (string, error) {
 		}
 	}
 	return abs, nil
+}
+
+func normalizeWorkspaceAlias(path string) string {
+	cleaned := strings.Trim(strings.ReplaceAll(path, "\\", "/"), "/")
+	if cleaned == "" || cleaned == "." || strings.EqualFold(cleaned, "workspace") {
+		return "."
+	}
+	if strings.HasPrefix(strings.ToLower(cleaned), "workspace/") {
+		return cleaned[len("workspace/"):]
+	}
+	return path
 }

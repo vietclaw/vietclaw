@@ -236,3 +236,22 @@ func TestFileAndHashUtilities(t *testing.T) {
 		t.Errorf("expected test.txt in find matches, got: %v", findMatches)
 	}
 }
+
+func TestWorkspaceAliasPaths(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := config.Default(config.Paths{DataDir: tempDir})
+	cfg.Tools.Files.Enabled = true
+	cfg.Tools.Files.WorkspaceOnly = true
+	cfg.Agent.Workspace = tempDir
+	p := tools.NewPolicy(cfg)
+
+	for _, input := range []string{".", "workspace", "/workspace", "workspace/config.json", "/workspace/config.json"} {
+		got, err := p.FileAllowed(input)
+		if err != nil {
+			t.Fatalf("FileAllowed(%q): %v", input, err)
+		}
+		if strings.Contains(got, filepath.Join("workspace", "workspace")) {
+			t.Fatalf("workspace alias duplicated for %q: %s", input, got)
+		}
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -27,6 +28,10 @@ func (t ShellExec) Run(ctx context.Context, input string) (string, error) {
 	}
 	if t.Policy.cfg.Tools.Shell.Sandbox == "docker" {
 		return t.runDocker(ctx, fields)
+	}
+	if runtime.GOOS == "windows" {
+		out, err := exec.CommandContext(ctx, "cmd", "/C", input).CombinedOutput()
+		return string(out), err
 	}
 	out, err := exec.CommandContext(ctx, fields[0], fields[1:]...).CombinedOutput()
 	return string(out), err
