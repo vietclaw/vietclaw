@@ -70,8 +70,25 @@ func mergeAgent(cfg AgentConfig, def AgentConfig) AgentConfig {
 }
 
 func mergeChannels(cfg ChannelsConfig, def ChannelsConfig) ChannelsConfig {
+	cfg.Attachments = mergeAttachments(cfg.Attachments, def.Attachments)
 	cfg.Discord = mergeDiscord(cfg.Discord, def.Discord)
 	cfg.Telegram = mergeTelegram(cfg.Telegram, def.Telegram)
+	return cfg
+}
+
+func mergeAttachments(cfg AttachmentConfig, def AttachmentConfig) AttachmentConfig {
+	if !cfg.Enabled {
+		cfg.Enabled = def.Enabled
+	}
+	if cfg.MaxFiles == 0 {
+		cfg.MaxFiles = def.MaxFiles
+	}
+	if cfg.MaxBytes == 0 {
+		cfg.MaxBytes = def.MaxBytes
+	}
+	if cfg.AllowedExtensions == nil {
+		cfg.AllowedExtensions = def.AllowedExtensions
+	}
 	return cfg
 }
 

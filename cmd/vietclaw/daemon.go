@@ -109,10 +109,10 @@ func newChannelManager(cfg config.Config, service *agent.Service, database *sql.
 	handler := channels.NewHandler(service, database, logger)
 	adapters := []channels.Adapter{}
 	if cfg.Channels.Discord.Enabled {
-		adapters = append(adapters, discordchannel.New(cfg.Channels.Discord, handler))
+		adapters = append(adapters, discordchannel.New(cfg.Channels.Discord, cfg.Channels.Attachments, handler))
 	}
 	if cfg.Channels.Telegram.Enabled {
-		adapters = append(adapters, telegramchannel.New(cfg.Channels.Telegram, handler))
+		adapters = append(adapters, telegramchannel.New(cfg.Channels.Telegram, cfg.Channels.Attachments, handler))
 	}
 	return channels.NewManager(cfg, logger, adapters)
 }

@@ -15,12 +15,13 @@ import (
 )
 
 type Adapter struct {
-	cfg     config.DiscordConfig
-	handler *channels.Handler
+	cfg        config.DiscordConfig
+	attachment config.AttachmentConfig
+	handler    *channels.Handler
 }
 
-func New(cfg config.DiscordConfig, handler *channels.Handler) *Adapter {
-	return &Adapter{cfg: cfg, handler: handler}
+func New(cfg config.DiscordConfig, attachment config.AttachmentConfig, handler *channels.Handler) *Adapter {
+	return &Adapter{cfg: cfg, attachment: attachment, handler: handler}
 }
 
 func (a *Adapter) Name() string {
@@ -51,7 +52,11 @@ func (a *Adapter) Start(ctx context.Context) error {
 func (a *Adapter) onMessage(ctx context.Context) func(*discordgo.Session, *discordgo.MessageCreate) {
 	return func(s *discordgo.Session, event *discordgo.MessageCreate) {
 		msg := event.Message
-		if msg == nil || msg.Author == nil || msg.Author.Bot || strings.TrimSpace(msg.Content) == "" {
+		if msg == nil || msg.Author == nil || msg.Author.Bot {
+			return
+		}
+		attachments := a.attachments(ctx, msg.Attachments)
+		if strings.TrimSpace(msg.Content) == "" && len(attachments) == 0 {
 			return
 		}
 		if s.State != nil && s.State.User != nil && msg.Author.ID == s.State.User.ID {
@@ -90,6 +95,7 @@ func (a *Adapter) onMessage(ctx context.Context) func(*discordgo.Session, *disco
 			MentionsBot:  mentionsBot,
 			Text:         msg.Content,
 			RawText:      msg.Content,
+			Attachments:  attachments,
 			CreatedAt:    time.Now().UTC(),
 		}
 
@@ -103,6 +109,28 @@ func (a *Adapter) onMessage(ctx context.Context) func(*discordgo.Session, *disco
 			return sendChunks(sendCtx, s, replyTo.ChannelID, replyTo.MessageID, reply, fallback)
 		})
 	}
+}
+
+func (a *Adapter) attachments(ctx context.Context, items []*discordgo.MessageAttachment) []channels.Attachment {
+	cfg := a.attachment
+	maxFiles := cfg.MaxFiles
+	if maxFiles <= 0 {
+		maxFiles = config.DefaultAttachmentMaxFiles
+	}
+	var out []channels.Attachment
+	for _, item := range items {
+		if item == nil || len(out) >= maxFiles {
+			continue
+		}
+		if !channels.AttachmentAllowed(item.Filename, item.ContentType, int64(item.Size), cfg) {
+			continue
+		}
+		att, err := channels.DownloadTextAttachment(ctx, item.URL, item.Filename, item.ContentType, int64(item.Size), cfg)
+		if err == nil {
+			out = append(out, att)
+		}
+	}
+	return out
 }
 
 func mentionsUser(msg *discordgo.Message, userID string) bool {

@@ -58,8 +58,16 @@ type AgentProfileConfig struct {
 }
 
 type ChannelsConfig struct {
-	Discord  DiscordConfig  `json:"discord"`
-	Telegram TelegramConfig `json:"telegram"`
+	Discord     DiscordConfig    `json:"discord"`
+	Telegram    TelegramConfig   `json:"telegram"`
+	Attachments AttachmentConfig `json:"attachments"`
+}
+
+type AttachmentConfig struct {
+	Enabled           bool     `json:"enabled"`
+	MaxFiles          int      `json:"max_files"`
+	MaxBytes          int64    `json:"max_bytes"`
+	AllowedExtensions []string `json:"allowed_extensions"`
 }
 
 type DiscordConfig struct {

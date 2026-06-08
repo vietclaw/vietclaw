@@ -28,6 +28,8 @@ const (
 	DefaultTelegramTokenEnv       = "VIETCLAW_TELEGRAM_TOKEN"
 	DefaultRespondMentionOrReply  = "mention_or_reply"
 	DefaultTelegramPollTimeoutSec = 30
+	DefaultAttachmentMaxFiles     = 5
+	DefaultAttachmentMaxBytes     = 512 * 1024
 
 	DefaultProviderID    = "mock"
 	DefaultProviderType  = "mock"
@@ -71,6 +73,12 @@ func Default(paths Paths) Config {
 			MaxOutputTokens:    DefaultMaxOutputTokens,
 		},
 		Channels: ChannelsConfig{
+			Attachments: AttachmentConfig{
+				Enabled:           true,
+				MaxFiles:          DefaultAttachmentMaxFiles,
+				MaxBytes:          DefaultAttachmentMaxBytes,
+				AllowedExtensions: DefaultTextAttachmentExtensions(),
+			},
 			Discord: DiscordConfig{
 				Enabled:         false,
 				TokenEnv:        DefaultDiscordTokenEnv,

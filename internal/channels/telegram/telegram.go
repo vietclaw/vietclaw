@@ -16,12 +16,13 @@ import (
 )
 
 type Adapter struct {
-	cfg     config.TelegramConfig
-	handler *channels.Handler
+	cfg        config.TelegramConfig
+	attachment config.AttachmentConfig
+	handler    *channels.Handler
 }
 
-func New(cfg config.TelegramConfig, handler *channels.Handler) *Adapter {
-	return &Adapter{cfg: cfg, handler: handler}
+func New(cfg config.TelegramConfig, attachment config.AttachmentConfig, handler *channels.Handler) *Adapter {
+	return &Adapter{cfg: cfg, attachment: attachment, handler: handler}
 }
 
 func (a *Adapter) Name() string {
@@ -56,7 +57,12 @@ func (a *Adapter) Start(ctx context.Context) error {
 }
 
 func (a *Adapter) handleMessage(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
-	if msg.From == nil || msg.From.IsBot || strings.TrimSpace(msg.Text) == "" {
+	if msg.From == nil || msg.From.IsBot {
+		return
+	}
+	text := firstNonEmpty(msg.Text, msg.Caption)
+	attachments := a.attachments(ctx, bot, msg)
+	if strings.TrimSpace(text) == "" && len(attachments) == 0 {
 		return
 	}
 	chatID := strconv.FormatInt(msg.Chat.ID, 10)
@@ -65,7 +71,7 @@ func (a *Adapter) handleMessage(ctx context.Context, bot *tgbotapi.BotAPI, msg *
 	}
 	isPrivate := msg.Chat.IsPrivate()
 	botUsername := "@" + bot.Self.UserName
-	mentionsBot := strings.Contains(strings.ToLower(msg.Text), strings.ToLower(botUsername))
+	mentionsBot := strings.Contains(strings.ToLower(text), strings.ToLower(botUsername))
 	isReplyToBot := msg.ReplyToMessage != nil && msg.ReplyToMessage.From != nil && msg.ReplyToMessage.From.ID == bot.Self.ID
 
 	inbound := channels.InboundMessage{
@@ -78,8 +84,9 @@ func (a *Adapter) handleMessage(ctx context.Context, bot *tgbotapi.BotAPI, msg *
 		IsGroup:      !isPrivate,
 		IsReplyToBot: isReplyToBot,
 		MentionsBot:  mentionsBot,
-		Text:         msg.Text,
-		RawText:      msg.Text,
+		Text:         text,
+		RawText:      text,
+		Attachments:  attachments,
 		CreatedAt:    time.Now().UTC(),
 	}
 
@@ -92,6 +99,34 @@ func (a *Adapter) handleMessage(ctx context.Context, bot *tgbotapi.BotAPI, msg *
 	_ = a.handler.Handle(ctx, inbound, channels.TelegramPolicy(a.cfg), []string{botUsername}, func(sendCtx context.Context, replyTo channels.InboundMessage, reply string) error {
 		return sendChunks(sendCtx, bot, msg, reply, a.handler.Text(i18n.ChannelEmptyPrompt))
 	})
+}
+
+func (a *Adapter) attachments(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) []channels.Attachment {
+	if msg.Document == nil {
+		return nil
+	}
+	cfg := a.attachment
+	if !channels.AttachmentAllowed(msg.Document.FileName, msg.Document.MimeType, int64(msg.Document.FileSize), cfg) {
+		return nil
+	}
+	url, err := bot.GetFileDirectURL(msg.Document.FileID)
+	if err != nil {
+		return nil
+	}
+	att, err := channels.DownloadTextAttachment(ctx, url, msg.Document.FileName, msg.Document.MimeType, int64(msg.Document.FileSize), cfg)
+	if err != nil {
+		return nil
+	}
+	return []channels.Attachment{att}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func sendChunks(ctx context.Context, bot *tgbotapi.BotAPI, replyTo *tgbotapi.Message, text, fallback string) error {

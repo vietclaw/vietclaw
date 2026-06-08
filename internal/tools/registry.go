@@ -57,6 +57,7 @@ func NewRegistry(cfg config.Config) *ToolRegistry {
 	r.tools["math_calc"] = MathCalc{}
 	r.tools["process_list"] = ProcessList{}
 	r.tools["ip_lookup"] = IPLookup{}
+	registerExtraTools(r.tools, p)
 
 	r.discoverMCP(context.Background())
 	return r
@@ -425,6 +426,7 @@ func (r *ToolRegistry) GetDefinitions() []providers.ToolDefinition {
 		},
 	})
 
+	list = append(list, extraToolDefinitions()...)
 	list = append(list, r.defs...)
 	return list
 }

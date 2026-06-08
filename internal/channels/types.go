@@ -27,7 +27,15 @@ type InboundMessage struct {
 	MentionsBot  bool
 	Text         string
 	RawText      string
+	Attachments  []Attachment
 	CreatedAt    time.Time
+}
+
+type Attachment struct {
+	Name        string
+	ContentType string
+	Size        int64
+	Text        string
 }
 
 type Policy struct {

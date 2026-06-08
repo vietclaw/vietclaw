@@ -48,6 +48,7 @@ func (h *Handler) Handle(ctx context.Context, msg InboundMessage, policy Policy,
 	}
 
 	prompt := strings.TrimSpace(msg.Text)
+	prompt = PromptWithAttachments(prompt, msg.Attachments)
 	if prompt == "" {
 		prompt = h.text(i18n.ChannelEmptyPrompt)
 	}
