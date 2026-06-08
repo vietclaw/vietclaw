@@ -8,6 +8,8 @@ Phase 2 adds the minimal agent runtime: rule-based intent routing, SQLite memory
 
 Phase 3 adds chat channel adapters for Discord and Telegram. Channel adapters only normalize inbound messages, apply channel rules, call the existing agent runtime, and send replies back.
 
+Phase 4 adds a Nuxt static web UI that gets embedded into the Go binary. Node is only needed for development and CI builds, not for running VietClaw as an end user.
+
 ## Why Go + SQLite
 
 Go keeps the runtime small, simple to deploy, and friendly to weak VPS machines with 1-2 CPU cores and 1-2GB RAM.
@@ -60,6 +62,15 @@ The daemon listens on `127.0.0.1:18636` by default.
 - HTTP APIs: `/api/channels`, `/api/channels/discord/test`, `/api/channels/telegram/test`
 - Channel audit tables: `channel_messages`, `channel_events`
 
+## Phase 4 Includes
+
+- Nuxt static web app in `apps/web`
+- Tailwind CSS v4 through the Vite plugin
+- Embedded UI dist served by Go from `internal/web/dist`
+- SPA fallback for `/chat`, `/memory`, `/providers`, `/budget`, `/logs`, `/channels`, and `/sessions`
+- GitHub Actions CI for web build, Go tests, and Go binary build
+- Tag-based release workflow with Linux, Windows, and macOS artifacts
+
 ## Discord
 
 1. Create a Discord bot in the Discord Developer Portal.
@@ -101,8 +112,39 @@ In private chat, chat normally. `/ask` or other command wrappers are not require
 
 Do not add VietClaw to an untrusted group if dangerous tools are enabled. `shell.exec` is disabled by default.
 
+## Web UI Development
+
+Run the backend:
+
+```sh
+go run ./cmd/vietclaw daemon
+```
+
+Run the Nuxt dev server only while developing UI:
+
+```sh
+cd apps/web
+pnpm install
+pnpm dev
+```
+
+Build static UI and copy it into the Go embed path:
+
+```sh
+cd apps/web
+pnpm build
+```
+
+Then build the final binary:
+
+```sh
+go build ./cmd/vietclaw
+```
+
+The final binary serves the embedded UI and does not need Node, pnpm, or npm at runtime.
+
 ## Next Phases
 
 - Real provider presets and approval flow
 - Better session summaries and memory curation
-- Web UI for chat and memory management
+- Web UI settings for providers, channels, and memory curation

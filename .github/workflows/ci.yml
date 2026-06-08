@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main, dev, unstable]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install web deps
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck web
+        working-directory: apps/web
+        run: pnpm typecheck
+
+      - name: Build embedded web UI
+        working-directory: apps/web
+        run: pnpm build
+
+      - name: Test Go
+        run: go test ./...
+
+      - name: Build VietClaw
+        run: go build ./cmd/vietclaw
+

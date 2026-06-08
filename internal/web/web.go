@@ -2,8 +2,11 @@ package web
 
 import (
 	"encoding/json"
+	"io/fs"
+	"mime"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -14,15 +17,14 @@ import (
 	"vietclaw/internal/memory"
 	"vietclaw/internal/providers"
 	"vietclaw/internal/router"
-	webassets "vietclaw/web"
 )
 
 func NewRouter(application *app.App) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /", handleIndex(application))
 	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("GET /status", handleStatus(application))
 	mux.HandleFunc("GET /logs/recent", handleRecentLogs(application))
+	mux.HandleFunc("GET /api/logs/recent", handleRecentLogs(application))
 	mux.HandleFunc("POST /api/chat", handleAPIChat(application))
 	mux.HandleFunc("GET /api/memory", handleMemoryList(application))
 	mux.HandleFunc("POST /api/memory", handleMemoryAdd(application))
@@ -30,29 +32,48 @@ func NewRouter(application *app.App) http.Handler {
 	mux.HandleFunc("GET /api/sessions", handleSessions(application))
 	mux.HandleFunc("GET /api/sessions/{id}", handleSessionDetail(application))
 	mux.HandleFunc("GET /api/costs/today", handleCostsToday(application))
+	mux.HandleFunc("GET /api/budget", handleBudget(application))
 	mux.HandleFunc("GET /api/providers", handleProviders(application))
 	mux.HandleFunc("GET /api/channels", handleChannels(application))
 	mux.HandleFunc("POST /api/channels/discord/test", handleDiscordTest(application))
 	mux.HandleFunc("POST /api/channels/telegram/test", handleTelegramTest(application))
+	mux.HandleFunc("GET /", handleStatic(application))
 	return mux
 }
 
-func handleIndex(application *app.App) http.HandlerFunc {
-	tmpl := webassets.IndexTemplate()
+func handleStatic(application *app.App) http.HandlerFunc {
+	dist, err := fs.Sub(webDist, "dist")
+	if err != nil {
+		application.Logger.Printf("load embedded web dist: %v", err)
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
 			http.NotFound(w, r)
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		data := map[string]any{
-			"Version": application.Version.Version,
-			"Uptime":  time.Since(application.StartTime).Round(time.Second).String(),
+		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		if name == "." || name == "" {
+			name = "index.html"
 		}
-		if err := tmpl.Execute(w, data); err != nil {
-			application.Logger.Printf("render index: %v", err)
+		if file, err := dist.Open(name); err == nil {
+			defer file.Close()
+			if info, statErr := file.Stat(); statErr == nil && !info.IsDir() {
+				serveEmbeddedFile(w, r, name, file, info.ModTime())
+				return
+			}
 		}
+		file, err := dist.Open("index.html")
+		if err != nil {
+			http.Error(w, "web UI is not available", http.StatusServiceUnavailable)
+			return
+		}
+		defer file.Close()
+		serveEmbeddedFile(w, r, "index.html", file, time.Now())
 	}
 }
 
@@ -182,6 +203,18 @@ func handleCostsToday(application *app.App) http.HandlerFunc {
 	}
 }
 
+func handleBudget(application *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"total_cost_usd":             router.TodayCost(r.Context(), application.DB),
+			"daily_usd_limit":            application.Config.Budget.DailyUSDLimit,
+			"require_approval_above_usd": application.Config.Budget.RequireApprovalAboveUSD,
+			"cheap_first":                application.Config.Router.CheapFirst,
+			"allow_escalation":           application.Config.Router.AllowEscalation,
+		})
+	}
+}
+
 func handleProviders(application *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, providers.Redact(application.Config.Providers))
@@ -245,4 +278,24 @@ func recentLines(path string, maxLines int) ([]string, error) {
 		return lines, nil
 	}
 	return lines[len(lines)-maxLines:], nil
+}
+
+func serveEmbeddedFile(w http.ResponseWriter, r *http.Request, name string, file fs.File, modTime time.Time) {
+	if strings.HasPrefix(name, "_nuxt/") || strings.HasPrefix(name, "assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "no-cache")
+	}
+	if contentType := mime.TypeByExtension(path.Ext(name)); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+	reader, ok := file.(interface {
+		Read([]byte) (int, error)
+		Seek(int64, int) (int64, error)
+	})
+	if !ok {
+		http.Error(w, "embedded file is not seekable", http.StatusInternalServerError)
+		return
+	}
+	http.ServeContent(w, r, name, modTime, reader)
 }

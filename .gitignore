@@ -5,6 +5,9 @@ vietclaw.exe
 *.db
 *.db-shm
 *.db-wal
-dist/
+/dist/
 tmp/
-
+apps/web/node_modules/
+apps/web/.nuxt/
+apps/web/.output/
+apps/web/dist/
