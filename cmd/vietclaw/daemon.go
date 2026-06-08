@@ -58,13 +58,14 @@ func runDaemon() error {
 	}
 
 	application := &app.App{
-		Config:    cfg,
-		DB:        database,
-		Logger:    logger,
-		StartTime: time.Now(),
-		Version:   version.Current(),
-		DataDir:   paths.DataDir,
-		LogFile:   paths.LogFile,
+		Config:     cfg,
+		DB:         database,
+		Logger:     logger,
+		StartTime:  time.Now(),
+		Version:    version.Current(),
+		DataDir:    paths.DataDir,
+		ConfigFile: paths.ConfigFile,
+		LogFile:    paths.LogFile,
 	}
 	application.Agent = agent.NewService(cfg, database)
 	application.Channels = newChannelManager(cfg, application.Agent, database, logger)

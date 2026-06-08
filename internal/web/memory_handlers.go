@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"vietclaw/internal/app"
 	"vietclaw/internal/memory"
@@ -67,5 +68,31 @@ func handleMemorySearch(application *app.App) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, records)
+	}
+}
+
+func handleMemoryDelete(application *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid memory id")
+			return
+		}
+		if err := application.Agent.Memory().Delete(r.Context(), id); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	}
+}
+
+func handleMemoryCurate(application *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		result, err := application.Agent.Memory().CurateDuplicates(r.Context(), r.URL.Query().Get("scope"))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "curation": result})
 	}
 }

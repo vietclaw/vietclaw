@@ -12,13 +12,14 @@ import (
 )
 
 type App struct {
-	Config    config.Config
-	DB        *sql.DB
-	Logger    *log.Logger
-	StartTime time.Time
-	Version   version.Info
-	DataDir   string
-	LogFile   string
-	Agent     *agent.Service
-	Channels  *channels.Manager
+	Config     config.Config
+	DB         *sql.DB
+	Logger     *log.Logger
+	StartTime  time.Time
+	Version    version.Info
+	DataDir    string
+	ConfigFile string
+	LogFile    string
+	Agent      *agent.Service
+	Channels   *channels.Manager
 }

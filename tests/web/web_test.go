@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -102,6 +103,46 @@ func TestAPIChatStreamErrorIsJSONEvent(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, "event: error") || !strings.Contains(body, `"error"`) {
 		t.Fatalf("expected json error SSE event, got %q", body)
+	}
+}
+
+func TestSettingsValidationRejectsInvalidConfig(t *testing.T) {
+	application := testApp(t)
+	cfg := application.Config
+	cfg.Server.Port = -1
+	body, _ := json.Marshal(cfg)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/settings", bytes.NewReader(body))
+	web.NewRouter(application).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestMemoryDeleteAndCurate(t *testing.T) {
+	application := testApp(t)
+	ctx := context.Background()
+	first, err := application.Agent.Memory().Add(ctx, memory.Record{Scope: "user:local", Content: "duplicate memory"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := application.Agent.Memory().Add(ctx, memory.Record{Scope: "user:local", Content: "duplicate   memory"}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/memory/curate?scope=user:local", nil)
+	web.NewRouter(application).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("curate status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodDelete, "/api/memory/"+strconv.FormatInt(first.ID, 10), nil)
+	web.NewRouter(application).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete status = %d body = %s", rec.Code, rec.Body.String())
 	}
 }
 
