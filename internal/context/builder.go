@@ -35,7 +35,7 @@ func (b *Builder) Messages(ctx context.Context, sessionID, userID, userMessage s
 	}
 
 	parts := []string{i18n.T(lang, i18n.SystemPromptBase, agentName)}
-	scope := "user:" + userID
+	scope := scopeForUser(userID)
 	memories, _ := b.mem.SearchHybrid(ctx, scope, userMessage, 6, embedder)
 	if len(memories) > 0 {
 		lines := []string{i18n.T(lang, i18n.SystemMemoryHeader)}
@@ -65,4 +65,11 @@ func (b *Builder) Messages(ctx context.Context, sessionID, userID, userMessage s
 		{Role: "system", Content: system},
 		{Role: "user", Content: userMessage},
 	}, nil
+}
+
+func scopeForUser(userID string) string {
+	if strings.Contains(userID, ":") {
+		return userID
+	}
+	return "user:" + userID
 }

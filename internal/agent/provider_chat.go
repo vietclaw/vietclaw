@@ -13,11 +13,12 @@ const (
 
 func (s *Service) handleProviderChat(ctx context.Context, req ChatRequest, runID string, intent router.Intent) (ChatResponse, error) {
 	embedder := s.router.SelectDefaultEmbedder()
-	messages, err := s.context.Messages(ctx, req.SessionID, req.UserID, req.Message, embedder)
+	messages, err := s.context.Messages(ctx, req.SessionID, s.memoryScope(req), req.Message, embedder)
 	if err != nil {
 		_ = s.finishRun(ctx, runID, RunStatusFailed, err.Error(), "", "")
 		return ChatResponse{}, err
 	}
+	messages = s.applyProfilePersona(req, messages)
 
 	chatReq := providers.ChatRequest{
 		SessionID:       req.SessionID,
@@ -39,6 +40,7 @@ func (s *Service) handleProviderChat(ctx context.Context, req ChatRequest, runID
 		return ChatResponse{
 			OK:        false,
 			SessionID: req.SessionID,
+			AgentID:   req.AgentID,
 			Intent:    string(intent),
 			Reply:     reply,
 			Error:     reply,
@@ -52,6 +54,7 @@ func (s *Service) handleProviderChat(ctx context.Context, req ChatRequest, runID
 		return ChatResponse{
 			OK:        false,
 			SessionID: req.SessionID,
+			AgentID:   req.AgentID,
 			Intent:    string(intent),
 			Provider:  providerResp.Provider,
 			Model:     providerResp.Model,
@@ -65,6 +68,7 @@ func (s *Service) handleProviderChat(ctx context.Context, req ChatRequest, runID
 	return ChatResponse{
 		OK:        true,
 		SessionID: req.SessionID,
+		AgentID:   req.AgentID,
 		Intent:    string(intent),
 		Reply:     providerResp.Text,
 		Provider:  providerResp.Provider,

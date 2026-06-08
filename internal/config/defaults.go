@@ -18,6 +18,7 @@ const (
 
 	DefaultAgentLanguage          = "vi"
 	DefaultAgentStyle             = "natural_short"
+	DefaultAgentID                = "default"
 	DefaultSkillDir               = ".codex/skills"
 	DefaultMaxContextChars        = 24000
 	DefaultMaxHistoryMessages     = 12
@@ -106,6 +107,17 @@ func Default(paths Paths) Config {
 		Budget: BudgetConfig{
 			DailyUSDLimit:           DefaultDailyUSDLimit,
 			RequireApprovalAboveUSD: DefaultRequireApprovalAboveUSD,
+		},
+		Agents: []AgentProfileConfig{
+			{
+				ID:          DefaultAgentID,
+				Name:        AppName,
+				Language:    DefaultAgentLanguage,
+				Persona:     "",
+				Tools:       []string{},
+				Providers:   []string{},
+				MemoryScope: "",
+			},
 		},
 	}
 }

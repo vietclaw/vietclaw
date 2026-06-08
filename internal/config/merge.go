@@ -29,6 +29,9 @@ func MergeDefault(cfg Config, def Config) Config {
 	if cfg.Budget.RequireApprovalAboveUSD == 0 {
 		cfg.Budget.RequireApprovalAboveUSD = def.Budget.RequireApprovalAboveUSD
 	}
+	if cfg.Agents == nil {
+		cfg.Agents = def.Agents
+	}
 	return cfg
 }
 

@@ -8,15 +8,16 @@ type Paths struct {
 }
 
 type Config struct {
-	Server    ServerConfig     `json:"server"`
-	Runtime   RuntimeConfig    `json:"runtime"`
-	Database  DatabaseConfig   `json:"database"`
-	Agent     AgentConfig      `json:"agent"`
-	Channels  ChannelsConfig   `json:"channels"`
-	Providers []ProviderConfig `json:"providers"`
-	Router    RouterConfig     `json:"router"`
-	Tools     ToolsConfig      `json:"tools"`
-	Budget    BudgetConfig     `json:"budget"`
+	Server    ServerConfig         `json:"server"`
+	Runtime   RuntimeConfig        `json:"runtime"`
+	Database  DatabaseConfig       `json:"database"`
+	Agent     AgentConfig          `json:"agent"`
+	Channels  ChannelsConfig       `json:"channels"`
+	Providers []ProviderConfig     `json:"providers"`
+	Router    RouterConfig         `json:"router"`
+	Tools     ToolsConfig          `json:"tools"`
+	Budget    BudgetConfig         `json:"budget"`
+	Agents    []AgentProfileConfig `json:"agents,omitempty"`
 }
 
 type ServerConfig struct {
@@ -44,6 +45,16 @@ type AgentConfig struct {
 	MaxHistoryMessages int      `json:"max_history_messages"`
 	MaxSteps           int      `json:"max_steps"`
 	MaxOutputTokens    int      `json:"max_output_tokens"`
+}
+
+type AgentProfileConfig struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Language    string   `json:"language"`
+	Persona     string   `json:"persona"`
+	Tools       []string `json:"tools,omitempty"`
+	Providers   []string `json:"providers,omitempty"`
+	MemoryScope string   `json:"memory_scope"`
 }
 
 type ChannelsConfig struct {

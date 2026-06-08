@@ -6,8 +6,8 @@ import (
 	"vietclaw/internal/config"
 )
 
-var memoryAddPrefixes = []string{"nhớ là", "lưu lại", "từ nay"}
-var memoryQueryReplacers = []string{"mày nhớ gì về", "mày nhớ gì", "nhớ gì về", "server chính dùng gì", "server chính là gì", "?"}
+var memoryAddPrefixes = []string{"nhớ là", "lưu lại", "từ nay", "remember that", "save this", "note that"}
+var memoryQueryReplacers = []string{"mày nhớ gì về", "mày nhớ gì", "nhớ gì về", "server chính dùng gì", "server chính là gì", "what do you remember about", "what do you remember", "recall", "?"}
 
 func normalizeRequest(req ChatRequest, cfg config.Config) ChatRequest {
 	if req.SessionID == "" {
@@ -15,6 +15,9 @@ func normalizeRequest(req ChatRequest, cfg config.Config) ChatRequest {
 	}
 	if req.UserID == "" {
 		req.UserID = DefaultUserID
+	}
+	if req.AgentID == "" {
+		req.AgentID = config.DefaultAgentID
 	}
 	if req.Channel == "" {
 		req.Channel = DefaultChannel

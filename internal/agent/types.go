@@ -22,6 +22,7 @@ const (
 type ChatRequest struct {
 	SessionID string `json:"session_id"`
 	UserID    string `json:"user_id"`
+	AgentID   string `json:"agent_id,omitempty"`
 	Channel   string `json:"channel"`
 	Message   string `json:"message"`
 	Mode      string `json:"mode"`
@@ -30,6 +31,7 @@ type ChatRequest struct {
 type ChatResponse struct {
 	OK        bool    `json:"ok"`
 	SessionID string  `json:"session_id"`
+	AgentID   string  `json:"agent_id,omitempty"`
 	Intent    string  `json:"intent"`
 	Reply     string  `json:"reply"`
 	Provider  string  `json:"provider"`

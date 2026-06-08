@@ -11,11 +11,13 @@ import (
 
 func (s *Service) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
 	req = normalizeRequest(req, s.cfg)
+	req = s.applyAgentProfile(req)
 	if strings.TrimSpace(req.Message) == "" {
 		errText := s.text(i18n.AgentMessageRequired)
 		return ChatResponse{
 			OK:        false,
 			SessionID: req.SessionID,
+			AgentID:   req.AgentID,
 			Intent:    string(router.IntentUnknown),
 			Error:     errText,
 		}, fmt.Errorf("%s", errText)

@@ -13,6 +13,7 @@ import (
 
 func (s *Service) ChatStream(ctx context.Context, req ChatRequest) (<-chan providers.StreamChunk, error) {
 	req = normalizeRequest(req, s.cfg)
+	req = s.applyAgentProfile(req)
 	if strings.TrimSpace(req.Message) == "" {
 		return nil, fmt.Errorf("%s", s.text(i18n.AgentMessageRequired))
 	}
@@ -42,11 +43,12 @@ func (s *Service) ChatStream(ctx context.Context, req ChatRequest) (<-chan provi
 
 func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID string, intent router.Intent) (ChatResponse, error) {
 	embedder := s.router.SelectDefaultEmbedder()
-	messages, err := s.context.Messages(ctx, req.SessionID, req.UserID, req.Message, embedder)
+	messages, err := s.context.Messages(ctx, req.SessionID, s.memoryScope(req), req.Message, embedder)
 	if err != nil {
 		_ = s.finishRun(ctx, runID, RunStatusFailed, err.Error(), "", "")
 		return ChatResponse{}, err
 	}
+	messages = s.applyProfilePersona(req, messages)
 
 	chatReq := s.loopChatRequest(req, messages)
 	selection, excludedProviders, err := s.selectLoopProvider(ctx, chatReq, nil)
@@ -67,6 +69,7 @@ func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID str
 			return ChatResponse{
 				OK:        false,
 				SessionID: req.SessionID,
+				AgentID:   req.AgentID,
 				Intent:    string(intent),
 				Provider:  selection.Provider.ID(),
 				Model:     selection.Model,
@@ -115,6 +118,7 @@ func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID str
 	return ChatResponse{
 		OK:        true,
 		SessionID: req.SessionID,
+		AgentID:   req.AgentID,
 		Intent:    string(intent),
 		Reply:     finalReply,
 		Provider:  finalProvider,
@@ -130,12 +134,13 @@ func (s *Service) StreamAgenticLoop(ctx context.Context, req ChatRequest, runID 
 		defer close(ch)
 
 		embedder := s.router.SelectDefaultEmbedder()
-		messages, err := s.context.Messages(ctx, req.SessionID, req.UserID, req.Message, embedder)
+		messages, err := s.context.Messages(ctx, req.SessionID, s.memoryScope(req), req.Message, embedder)
 		if err != nil {
 			_ = s.finishRun(ctx, runID, RunStatusFailed, err.Error(), "", "")
 			ch <- providers.StreamChunk{Error: err.Error()}
 			return
 		}
+		messages = s.applyProfilePersona(req, messages)
 
 		chatReq := s.loopChatRequest(req, messages)
 		selection, excludedProviders, err := s.selectLoopProvider(ctx, chatReq, nil)
@@ -272,6 +277,7 @@ func (s *Service) selectionError(ctx context.Context, req ChatRequest, runID str
 	return ChatResponse{
 		OK:        false,
 		SessionID: req.SessionID,
+		AgentID:   req.AgentID,
 		Intent:    string(intent),
 		Reply:     reply,
 		Error:     reply,

@@ -23,7 +23,7 @@ func (s *Service) handleMemoryAdd(ctx context.Context, req ChatRequest, runID st
 	}
 
 	rec, err := s.mem.Add(ctx, memory.Record{
-		Scope:      "user:" + req.UserID,
+		Scope:      s.memoryScope(req),
 		Kind:       memory.KindNote,
 		Content:    content,
 		Confidence: memory.ConfidenceConfirmed,
@@ -40,6 +40,7 @@ func (s *Service) handleMemoryAdd(ctx context.Context, req ChatRequest, runID st
 	return ChatResponse{
 		OK:        true,
 		SessionID: req.SessionID,
+		AgentID:   req.AgentID,
 		Intent:    string(intent),
 		Reply:     reply,
 		Provider:  ProviderLocal,
@@ -50,7 +51,7 @@ func (s *Service) handleMemoryAdd(ctx context.Context, req ChatRequest, runID st
 func (s *Service) handleMemoryQuery(ctx context.Context, req ChatRequest, runID string, intent router.Intent) (ChatResponse, error) {
 	query := cleanMemoryQuery(req.Message)
 	embedder := s.router.SelectDefaultEmbedder()
-	records, err := s.mem.SearchHybrid(ctx, "user:"+req.UserID, query, 5, embedder)
+	records, err := s.mem.SearchHybrid(ctx, s.memoryScope(req), query, 5, embedder)
 	if err != nil {
 		_ = s.finishRun(ctx, runID, RunStatusFailed, err.Error(), ProviderLocal, ModelRule)
 		return ChatResponse{}, err
@@ -69,6 +70,7 @@ func (s *Service) handleMemoryQuery(ctx context.Context, req ChatRequest, runID 
 	return ChatResponse{
 		OK:        true,
 		SessionID: req.SessionID,
+		AgentID:   req.AgentID,
 		Intent:    string(intent),
 		Reply:     reply,
 		Provider:  ProviderLocal,
