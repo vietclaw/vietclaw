@@ -17,7 +17,7 @@ function renameSession() {
 
 function exportSession() {
   const s = currentSession()
-  if (!s || s.messages.length === 0) return
+  if (!s || (s.messages?.length ?? 0) === 0) return
   const json = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(s, null, 2))}`
   const link = document.createElement('a')
   link.href = json

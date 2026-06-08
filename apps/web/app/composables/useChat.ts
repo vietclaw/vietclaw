@@ -33,16 +33,45 @@ const sessions = ref<ChatSession[]>([])
 const currentSessionId = ref('')
 const isGenerating = ref(false)
 
+function normalizeSession(value: unknown): ChatSession | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Partial<ChatSession>
+  const id = typeof raw.id === 'string' && raw.id ? raw.id : `session_${Date.now()}`
+  return {
+    id,
+    title: typeof raw.title === 'string' && raw.title ? raw.title : 'Untitled Session',
+    persona: typeof raw.persona === 'string' && raw.persona ? raw.persona : 'general',
+    messages: Array.isArray(raw.messages)
+      ? raw.messages.map(message => ({
+          role: message.role === 'assistant' ? 'assistant' : 'user',
+          text: typeof message.text === 'string' ? message.text : '',
+          steps: Array.isArray(message.steps) ? message.steps : [],
+          meta: message.meta
+        }))
+      : [],
+    sessionId: typeof raw.sessionId === 'string' ? raw.sessionId : '',
+    createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now()
+  }
+}
+
+function normalizeSessions(value: unknown): ChatSession[] {
+  if (!Array.isArray(value)) return []
+  return value.map(normalizeSession).filter((session): session is ChatSession => Boolean(session))
+}
+
 function loadSessions() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) sessions.value = JSON.parse(raw)
-  } catch { sessions.value = [] }
+  if (import.meta.client) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) sessions.value = normalizeSessions(JSON.parse(raw))
+    } catch { sessions.value = [] }
+  }
   if (sessions.value.length === 0) createSession()
   else currentSessionId.value = sessions.value[0]?.id ?? ''
 }
 
 function saveSessions() {
+  if (!import.meta.client) return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions.value))
 }
 
@@ -87,6 +116,9 @@ function clearSessionMessages() {
 }
 
 function loadConfig() {
+  if (!import.meta.client) {
+    return { apiKey: '', model: 'gemini-2.5-flash-preview-09-2025', temperature: 0.7, persona: 'general', voice: 'Zephyr' }
+  }
   try {
     const raw = localStorage.getItem(CONFIG_KEY)
     if (raw) return JSON.parse(raw)
@@ -95,6 +127,7 @@ function loadConfig() {
 }
 
 function saveConfig(cfg: Record<string, unknown>) {
+  if (!import.meta.client) return
   localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg))
 }
 

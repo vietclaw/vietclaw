@@ -35,7 +35,7 @@ const { sessions, currentSessionId, createSession, switchSession, deleteSession 
           <div class="min-w-0">
             <div class="truncate text-sm font-medium text-zinc-200">{{ session.title }}</div>
             <div class="mt-0.5 text-[11px] text-zinc-500">
-              {{ session.messages.length }} messages
+              {{ session.messages?.length ?? 0 }} messages
             </div>
           </div>
         </div>
