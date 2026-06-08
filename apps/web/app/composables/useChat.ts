@@ -38,12 +38,21 @@ const sessions = ref<ChatSession[]>([])
 const currentSessionId = ref('')
 const isGenerating = ref(false)
 
+function createBackendSessionID() {
+  const suffix = Math.random().toString(36).slice(2, 10)
+  return `sess_${Date.now()}_${suffix}`
+}
+
 function normalizeSession(value: unknown): ChatSession | null {
   if (!value || typeof value !== 'object') return null
   const raw = value as Partial<ChatSession>
-  const id = typeof raw.id === 'string' && raw.id ? raw.id : `session_${Date.now()}`
+  const sessionId = typeof raw.sessionId === 'string' && raw.sessionId
+    ? raw.sessionId
+    : typeof raw.id === 'string' && raw.id.startsWith('sess_')
+      ? raw.id
+      : createBackendSessionID()
   return {
-    id,
+    id: sessionId,
     title: typeof raw.title === 'string' && raw.title ? raw.title : 'Untitled Session',
     persona: typeof raw.persona === 'string' && raw.persona ? raw.persona : 'general',
     messages: Array.isArray(raw.messages)
@@ -54,7 +63,7 @@ function normalizeSession(value: unknown): ChatSession | null {
           meta: message.meta
         }))
       : [],
-    sessionId: typeof raw.sessionId === 'string' ? raw.sessionId : '',
+    sessionId,
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now()
   }
 }
@@ -81,12 +90,13 @@ function saveSessions() {
 }
 
 function createSession(persona = 'general') {
+  const sessionId = createBackendSessionID()
   const s: ChatSession = {
-    id: `session_${Date.now()}`,
+    id: sessionId,
     title: 'Untitled Session',
     persona,
     messages: [],
-    sessionId: '',
+    sessionId,
     createdAt: Date.now()
   }
   sessions.value.unshift(s)
@@ -151,7 +161,7 @@ function parseSSEBlock(block: string): SSEEvent | null {
   return { event, data: data.join('\n') }
 }
 
-function applySSEEvent(event: SSEEvent, assistantMsg: ChatItem): boolean {
+function applySSEEvent(event: SSEEvent, session: ChatSession, assistantMsg: ChatItem): boolean {
   if (event.event === 'done') return true
   if (event.event === 'error') {
     const parsed = JSON.parse(event.data)
@@ -161,7 +171,14 @@ function applySSEEvent(event: SSEEvent, assistantMsg: ChatItem): boolean {
   }
 
   const parsed = JSON.parse(event.data)
-  if (event.event === 'tool_call') {
+  if (event.event === 'session') {
+    const nextSessionID = typeof parsed.session_id === 'string' ? parsed.session_id : ''
+    if (nextSessionID && nextSessionID !== session.sessionId) {
+      session.id = nextSessionID
+      session.sessionId = nextSessionID
+      currentSessionId.value = nextSessionID
+    }
+  } else if (event.event === 'tool_call') {
     assistantMsg.steps.push({
       type: 'tool_call',
       toolName: parsed.name,
@@ -209,7 +226,7 @@ async function sendMessage(text: string) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        session_id: s.sessionId || undefined,
+        session_id: s.sessionId,
         user_id: 'local',
         channel: 'web',
         message: text,
@@ -242,7 +259,7 @@ async function sendMessage(text: string) {
         const event = parseSSEBlock(block)
         if (!event) continue
         try {
-          stop = applySSEEvent(event, assistantMsg)
+          stop = applySSEEvent(event, s, assistantMsg)
           await yieldToUI()
         } catch {
           assistantMsg.steps.push({ type: 'error', error: 'Invalid stream event' })
@@ -254,9 +271,6 @@ async function sendMessage(text: string) {
       if (done) break
     }
 
-    if (s.sessionId === '' && assistantMsg.text) {
-      // Session ID should have been set by the backend
-    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Connection failed.'
     assistantMsg.text = `⚠️ ${msg}`

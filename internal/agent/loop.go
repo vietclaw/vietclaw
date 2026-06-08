@@ -133,6 +133,8 @@ func (s *Service) StreamAgenticLoop(ctx context.Context, req ChatRequest, runID 
 	go func() {
 		defer close(ch)
 
+		ch <- providers.StreamChunk{Event: "session", SessionID: req.SessionID}
+
 		embedder := s.router.SelectDefaultEmbedder()
 		messages, err := s.context.Messages(ctx, req.SessionID, s.memoryScope(req), req.Message, embedder)
 		if err != nil {
@@ -229,6 +231,7 @@ func (s *Service) streamRuleResponse(ctx context.Context, req ChatRequest, runID
 	ch := make(chan providers.StreamChunk, 2)
 	go func() {
 		defer close(ch)
+		ch <- providers.StreamChunk{Event: "session", SessionID: req.SessionID}
 		resp, err := handle(ctx, req, runID, intent)
 		if err != nil {
 			ch <- providers.StreamChunk{Error: err.Error()}

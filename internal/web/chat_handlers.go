@@ -68,6 +68,9 @@ func handleAPIChatStream(application *app.App) http.HandlerFunc {
 				break
 			}
 			switch chunk.Event {
+			case "session":
+				writeSSEJSON(w, "session", map[string]string{"session_id": chunk.SessionID})
+				flusher.Flush()
 			case "tool_call":
 				writeSSEJSON(w, "tool_call", map[string]string{
 					"name":  chunk.ToolName,

@@ -2,6 +2,10 @@
 import { MessageSquare, Plus, Trash2 } from '@lucide/vue'
 
 const { sessions, currentSessionId, createSession, switchSession, deleteSession } = useChat()
+
+function visibleSessionID(session: { id: string; sessionId?: string }) {
+  return session.sessionId || session.id
+}
 </script>
 
 <template>
@@ -34,8 +38,8 @@ const { sessions, currentSessionId, createSession, switchSession, deleteSession 
           </div>
           <div class="min-w-0">
             <div class="truncate text-sm font-medium text-zinc-200">{{ session.title }}</div>
-            <div class="mt-0.5 text-[11px] text-zinc-500">
-              {{ session.messages?.length ?? 0 }} messages
+            <div class="mt-0.5 truncate text-[11px] text-zinc-500">
+              {{ session.messages?.length ?? 0 }} messages - {{ visibleSessionID(session) }}
             </div>
           </div>
         </div>
