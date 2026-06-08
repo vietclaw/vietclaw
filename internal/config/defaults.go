@@ -18,6 +18,7 @@ const (
 
 	DefaultAgentLanguage          = "vi"
 	DefaultAgentStyle             = "natural_short"
+	DefaultSkillDir               = ".codex/skills"
 	DefaultMaxContextChars        = 24000
 	DefaultMaxHistoryMessages     = 12
 	DefaultMaxAgentSteps          = 5
@@ -56,6 +57,7 @@ func Default(paths Paths) Config {
 			Style:              DefaultAgentStyle,
 			DefaultMode:        DefaultRuntimeMode,
 			Workspace:          filepath.Join(paths.DataDir, WorkspaceName),
+			SkillDirs:          []string{DefaultSkillDir},
 			MaxContextChars:    DefaultMaxContextChars,
 			MaxHistoryMessages: DefaultMaxHistoryMessages,
 			MaxSteps:           DefaultMaxAgentSteps,

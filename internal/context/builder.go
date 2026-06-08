@@ -9,6 +9,7 @@ import (
 	"vietclaw/internal/i18n"
 	"vietclaw/internal/memory"
 	"vietclaw/internal/providers"
+	"vietclaw/internal/skills"
 )
 
 type Builder struct {
@@ -40,6 +41,16 @@ func (b *Builder) Messages(ctx context.Context, sessionID, userID, userMessage s
 		lines := []string{i18n.T(lang, i18n.SystemMemoryHeader)}
 		for _, rec := range memories {
 			lines = append(lines, "- "+rec.Content)
+		}
+		parts = append(parts, strings.Join(lines, "\n"))
+	}
+
+	loadedSkills, _ := skills.Load(b.cfg.Agent.SkillDirs)
+	matchedSkills := skills.Match(loadedSkills, userMessage, 3)
+	if len(matchedSkills) > 0 {
+		lines := []string{i18n.T(lang, i18n.SystemSkillHeader)}
+		for _, skill := range matchedSkills {
+			lines = append(lines, "- "+skill.Name+": "+skill.Instructions)
 		}
 		parts = append(parts, strings.Join(lines, "\n"))
 	}

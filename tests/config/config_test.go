@@ -20,6 +20,9 @@ func TestDefaultIncludesAgentRuntime(t *testing.T) {
 	if cfg.Agent.MaxSteps != config.DefaultMaxAgentSteps || cfg.Agent.MaxOutputTokens != config.DefaultMaxOutputTokens {
 		t.Fatalf("agent loop defaults invalid: %#v", cfg.Agent)
 	}
+	if len(cfg.Agent.SkillDirs) != 1 || cfg.Agent.SkillDirs[0] != config.DefaultSkillDir {
+		t.Fatalf("skill dirs default invalid: %#v", cfg.Agent.SkillDirs)
+	}
 	if cfg.Agent.Workspace != filepath.Join(dir, "workspace") {
 		t.Fatalf("workspace = %q", cfg.Agent.Workspace)
 	}

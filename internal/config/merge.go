@@ -48,6 +48,9 @@ func mergeAgent(cfg AgentConfig, def AgentConfig) AgentConfig {
 	if cfg.Workspace == "" {
 		cfg.Workspace = def.Workspace
 	}
+	if cfg.SkillDirs == nil {
+		cfg.SkillDirs = def.SkillDirs
+	}
 	if cfg.MaxContextChars == 0 {
 		cfg.MaxContextChars = def.MaxContextChars
 	}
@@ -132,6 +135,9 @@ func mergeTools(cfg ToolsConfig, def ToolsConfig) ToolsConfig {
 	}
 	if !cfg.Files.WorkspaceOnly {
 		cfg.Files.WorkspaceOnly = def.Files.WorkspaceOnly
+	}
+	if cfg.MCP == nil {
+		cfg.MCP = def.MCP
 	}
 	return cfg
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"vietclaw/internal/config"
 	"vietclaw/internal/i18n"
@@ -20,6 +21,13 @@ type ToolRegistry struct {
 	policy Policy
 	cfg    config.Config
 	tools  map[string]Tool
+	mcp    map[string]mcpToolRef
+	defs   []providers.ToolDefinition
+}
+
+type mcpToolRef struct {
+	client *MCPClient
+	name   string
 }
 
 func NewRegistry(cfg config.Config) *ToolRegistry {
@@ -28,10 +36,12 @@ func NewRegistry(cfg config.Config) *ToolRegistry {
 		policy: p,
 		cfg:    cfg,
 		tools:  make(map[string]Tool),
+		mcp:    make(map[string]mcpToolRef),
 	}
 	r.tools[toolFileRead] = FileRead{Policy: p}
 	r.tools[toolFileWrite] = FileWrite{Policy: p}
 	r.tools[toolShellExec] = ShellExec{Policy: p}
+	r.discoverMCP(context.Background())
 	return r
 }
 
@@ -39,6 +49,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, argsJSON string
 	normalized := normalizeToolName(name)
 	t, ok := r.tools[normalized]
 	if !ok {
+		if ref, ok := r.mcp[normalized]; ok {
+			return ref.client.Execute(ctx, ref.name, argsJSON)
+		}
 		return "", fmt.Errorf("tool not found: %s", name)
 	}
 
@@ -139,6 +152,7 @@ func (r *ToolRegistry) GetDefinitions() []providers.ToolDefinition {
 		})
 	}
 
+	list = append(list, r.defs...)
 	return list
 }
 
@@ -151,6 +165,27 @@ func normalizeToolName(name string) string {
 	case "shell.exec":
 		return toolShellExec
 	default:
+		if strings.HasPrefix(name, mcpToolPrefix+"_") {
+			return sanitizeToolName(name)
+		}
 		return name
+	}
+}
+
+func (r *ToolRegistry) discoverMCP(ctx context.Context) {
+	for _, server := range r.cfg.Tools.MCP {
+		if !server.Enabled {
+			continue
+		}
+		client := NewMCPClient(server)
+		discovered, err := client.Discover(ctx)
+		if err != nil {
+			continue
+		}
+		for _, tool := range discovered {
+			name := tool.Definition.Function.Name
+			r.mcp[name] = mcpToolRef{client: client, name: tool.Name}
+			r.defs = append(r.defs, tool.Definition)
+		}
 	}
 }

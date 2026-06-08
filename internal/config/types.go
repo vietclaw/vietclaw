@@ -34,15 +34,16 @@ type DatabaseConfig struct {
 }
 
 type AgentConfig struct {
-	Name               string `json:"name"`
-	Language           string `json:"language"`
-	Style              string `json:"style"`
-	DefaultMode        string `json:"default_mode"`
-	Workspace          string `json:"workspace"`
-	MaxContextChars    int    `json:"max_context_chars"`
-	MaxHistoryMessages int    `json:"max_history_messages"`
-	MaxSteps           int    `json:"max_steps"`
-	MaxOutputTokens    int    `json:"max_output_tokens"`
+	Name               string   `json:"name"`
+	Language           string   `json:"language"`
+	Style              string   `json:"style"`
+	DefaultMode        string   `json:"default_mode"`
+	Workspace          string   `json:"workspace"`
+	SkillDirs          []string `json:"skill_dirs"`
+	MaxContextChars    int      `json:"max_context_chars"`
+	MaxHistoryMessages int      `json:"max_history_messages"`
+	MaxSteps           int      `json:"max_steps"`
+	MaxOutputTokens    int      `json:"max_output_tokens"`
 }
 
 type ChannelsConfig struct {
@@ -90,8 +91,15 @@ type RouterConfig struct {
 }
 
 type ToolsConfig struct {
-	Shell ShellToolConfig `json:"shell"`
-	Files FileToolConfig  `json:"files"`
+	Shell ShellToolConfig   `json:"shell"`
+	Files FileToolConfig    `json:"files"`
+	MCP   []MCPServerConfig `json:"mcp,omitempty"`
+}
+
+type MCPServerConfig struct {
+	ID      string `json:"id"`
+	Enabled bool   `json:"enabled"`
+	URL     string `json:"url,omitempty"`
 }
 
 type ShellToolConfig struct {

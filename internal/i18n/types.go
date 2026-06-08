@@ -32,6 +32,7 @@ const (
 	SystemPromptBase       MessageID = "system.prompt_base"
 	SystemMemoryHeader     MessageID = "system.memory_header"
 	SystemHistoryHeader    MessageID = "system.history_header"
+	SystemSkillHeader      MessageID = "system.skill_header"
 	CLIUsage               MessageID = "cli.usage"
 	CLIErrorPrefix         MessageID = "cli.error_prefix"
 	CLIMemorySaved         MessageID = "cli.memory_saved"
