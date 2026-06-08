@@ -20,6 +20,8 @@ func New(cfg config.ProviderConfig) Provider {
 		return NewGemini(cfg, client)
 	case TypeCustomHTTP:
 		return NewCustomHTTP(cfg, client)
+	case TypeOpenCodeZen:
+		return NewOpenCodeZen(cfg, client)
 	case TypeOpenCodeCLI:
 		return NewOpenCodeCLI(cfg)
 	default:

@@ -1,50 +1,62 @@
 <script setup lang="ts">
+import { Menu, Edit2, Sparkles, Download } from '@lucide/vue'
+
 defineEmits<{ toggleMobile: [] }>()
 
-const route = useRoute()
+const { currentSession, sessions, currentSessionId } = useChat()
 
-const breadcrumbs = computed(() => {
-  const segments = route.path.split('/').filter(Boolean)
-  const crumbs = [{ label: 'Home', to: '/' }]
-  let path = ''
-  for (const seg of segments) {
-    path += `/${seg}`
-    const label = seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ')
-    crumbs.push({ label, to: path })
+function renameSession() {
+  const s = currentSession()
+  if (!s) return
+  const name = prompt('Update session title:', s.title)
+  if (name && name.trim()) {
+    s.title = name.trim()
+    useChat().saveSessions()
   }
-  return crumbs
-})
+}
+
+function exportSession() {
+  const s = currentSession()
+  if (!s || s.messages.length === 0) return
+  const json = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(s, null, 2))}`
+  const link = document.createElement('a')
+  link.href = json
+  link.download = `${s.title.replace(/\s+/g, '_')}.json`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
 </script>
 
 <template>
-  <header class="sticky top-0 z-30 flex h-14 items-center border-b border-[var(--border-0)] bg-[var(--bg-0)]/60 backdrop-blur-xl">
-    <div class="flex w-full items-center gap-3 px-4 sm:px-6 lg:px-10">
-      <!-- Mobile hamburger -->
+  <header class="h-14 border-b border-zinc-800/60 px-4 md:px-6 flex items-center justify-between bg-zinc-950/40 backdrop-blur-md z-20">
+    <div class="flex items-center gap-3">
+      <button class="md:hidden p-1.5 rounded hover:bg-zinc-900 text-zinc-400" @click="$emit('toggleMobile')">
+        <Menu :size="16" />
+      </button>
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-semibold text-zinc-200 max-w-[140px] md:max-w-xs truncate">
+          {{ currentSession()?.title || 'Untitled Session' }}
+        </span>
+        <button class="text-zinc-600 hover:text-zinc-400 transition-colors" @click="renameSession">
+          <Edit2 :size="12" />
+        </button>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
       <button
-        class="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--fg-2)] vc-transition-fast hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] lg:hidden vc-focus"
-        @click="$emit('toggleMobile')"
+        class="p-1.5 rounded hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300 transition-colors"
+        title="Export Session (JSON)"
+        @click="exportSession"
       >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
+        <Download :size="16" />
       </button>
 
-      <!-- Breadcrumbs -->
-      <nav class="flex items-center gap-1.5 text-[12px]">
-        <template v-for="(crumb, i) in breadcrumbs" :key="crumb.to">
-          <NuxtLink
-            v-if="i < breadcrumbs.length - 1"
-            :to="crumb.to"
-            class="text-[var(--fg-2)] vc-transition-fast hover:text-[var(--fg-0)] vc-focus"
-          >
-            {{ crumb.label }}
-          </NuxtLink>
-          <span v-else class="font-semibold text-[var(--fg-0)]">{{ crumb.label }}</span>
-          <svg v-if="i < breadcrumbs.length - 1" class="h-3 w-3 text-[var(--fg-2)]/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </template>
-      </nav>
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-400">
+        <span class="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+        <span>web</span>
+      </div>
     </div>
   </header>
 </template>

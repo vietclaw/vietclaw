@@ -2,14 +2,17 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"vietclaw/internal/config"
 	"vietclaw/internal/db"
+	"vietclaw/internal/providers"
 )
 
 func runSetup() error {
@@ -50,37 +53,67 @@ func runSetup() error {
 
 	// --- 2. PROVIDERS CONFIG ---
 	fmt.Println("\n\033[1;33m--- 2. Chọn LLM Providers muốn sử dụng ---\033[0m")
-	
-	providerOpts := []string{"OpenAI", "Google Gemini", "Anthropic Claude", "OpenCode CLI"}
-	providerDefaults := []bool{true, true, false, false}
-	
+	fmt.Println("\033[2m  Tip: OpenCode Zen là cách nhanh nhất để dùng AI miễn phí demo (https://opencode.ai/auth)\033[0m")
+
+	providerOpts := []string{"OpenCode Zen (recommended, free demo)", "OpenAI", "Google Gemini", "Anthropic Claude", "Ollama (local, hoàn toàn miễn phí)"}
+	providerDefaults := []bool{true, false, false, false, false}
+
 	selectedProviders, err := promptMultiSelect("Chọn LLM Providers bạn muốn bật", providerOpts, providerDefaults)
 	if err != nil {
 		return err
 	}
-	
-	enableOpenAI := selectedProviders[0]
-	enableGemini := selectedProviders[1]
-	enableAnthropic := selectedProviders[2]
-	enableOpenCodeCLI := selectedProviders[3]
+
+	enableZen := selectedProviders[0]
+	enableOpenAI := selectedProviders[1]
+	enableGemini := selectedProviders[2]
+	enableAnthropic := selectedProviders[3]
+	enableOllama := selectedProviders[4]
 
 	var enabledIDs []string
 	var enabledModels []string
 
+	// OpenCode Zen configuration
+	if enableZen {
+		fmt.Println("\n\033[36m>> Cấu hình OpenCode Zen:\033[0m")
+		fmt.Println("   Đăng ký tại: https://opencode.ai/auth")
+		apiKey := promptSecret(reader, "Nhập Zen API Key (bắt đầu bằng zen_..., Enter nếu dùng biến môi trường)")
+		if apiKey != "" {
+			envVars["OPENCODE_ZEN_KEY"] = apiKey
+		}
+
+		zenCfg := findOrCreateProvider(&cfg, "zen", "opencode-zen")
+		zenCfg.Enabled = true
+		zenCfg.APIKeyEnv = "OPENCODE_ZEN_KEY"
+		zenCfg.BaseURL = providers.ZenBaseURL
+
+		// Fetch live model list from Zen
+		pick := fetchAndPickModel(zenCfg.BaseURL, "OPENCODE_ZEN_KEY", apiKey, "deepseek/deepseek-chat")
+		zenCfg.DefaultModel = pick
+		updateProvider(&cfg, *zenCfg)
+
+		enabledIDs = append(enabledIDs, "zen")
+		enabledModels = append(enabledModels, zenCfg.DefaultModel)
+	} else {
+		disableProvider(&cfg, "zen")
+	}
+
 	// OpenAI configuration
 	if enableOpenAI {
 		fmt.Println("\n\033[36m>> Cấu hình OpenAI:\033[0m")
-		apiKey := promptSecret(reader, "Nhập OpenAI API Key (nhấn Enter nếu dùng biến môi trường)")
+		apiKey := promptSecret(reader, "Nhập OpenAI API Key (Enter nếu dùng biến môi trường)")
 		if apiKey != "" {
 			envVars["OPENAI_API_KEY"] = apiKey
 		}
-		
+
 		openaiCfg := findOrCreateProvider(&cfg, "openai", "openai")
 		openaiCfg.Enabled = true
-		openaiCfg.DefaultModel = promptString(reader, "Model OpenAI mặc định", "gpt-4o-mini")
 		openaiCfg.APIKeyEnv = "OPENAI_API_KEY"
+		openaiCfg.BaseURL = "https://api.openai.com/v1"
+
+		pick := fetchAndPickModel(openaiCfg.BaseURL, "OPENAI_API_KEY", apiKey, "gpt-4o-mini")
+		openaiCfg.DefaultModel = pick
 		updateProvider(&cfg, *openaiCfg)
-		
+
 		enabledIDs = append(enabledIDs, "openai")
 		enabledModels = append(enabledModels, openaiCfg.DefaultModel)
 	} else {
@@ -90,17 +123,27 @@ func runSetup() error {
 	// Gemini configuration
 	if enableGemini {
 		fmt.Println("\n\033[36m>> Cấu hình Google Gemini:\033[0m")
-		apiKey := promptSecret(reader, "Nhập Gemini API Key (nhấn Enter nếu dùng biến môi trường)")
+		apiKey := promptSecret(reader, "Nhập Gemini API Key (Enter nếu dùng biến môi trường)")
 		if apiKey != "" {
 			envVars["GEMINI_API_KEY"] = apiKey
 		}
-		
+
 		geminiCfg := findOrCreateProvider(&cfg, "gemini", "gemini")
 		geminiCfg.Enabled = true
-		geminiCfg.DefaultModel = promptString(reader, "Model Gemini mặc định", "gemini-1.5-flash")
 		geminiCfg.APIKeyEnv = "GEMINI_API_KEY"
+
+		// Gemini doesn't expose OpenAI-compatible /models — offer curated list
+		geminiModels := []string{
+			"gemini-2.5-flash-preview-05-20",
+			"gemini-2.5-pro-preview-06-05",
+			"gemini-2.0-flash",
+			"gemini-1.5-flash",
+			"gemini-1.5-pro",
+		}
+		pick := pickModelFromList(geminiModels, "gemini-2.5-flash-preview-05-20", "Chọn model Gemini mặc định")
+		geminiCfg.DefaultModel = pick
 		updateProvider(&cfg, *geminiCfg)
-		
+
 		enabledIDs = append(enabledIDs, "gemini")
 		enabledModels = append(enabledModels, geminiCfg.DefaultModel)
 	} else {
@@ -110,43 +153,57 @@ func runSetup() error {
 	// Anthropic configuration
 	if enableAnthropic {
 		fmt.Println("\n\033[36m>> Cấu hình Anthropic Claude:\033[0m")
-		apiKey := promptSecret(reader, "Nhập Anthropic API Key (nhấn Enter nếu dùng biến môi trường)")
+		apiKey := promptSecret(reader, "Nhập Anthropic API Key (Enter nếu dùng biến môi trường)")
 		if apiKey != "" {
 			envVars["ANTHROPIC_API_KEY"] = apiKey
 		}
-		
+
 		anthropicCfg := findOrCreateProvider(&cfg, "anthropic", "anthropic")
 		anthropicCfg.Enabled = true
-		anthropicCfg.DefaultModel = promptString(reader, "Model Anthropic mặc định", "claude-3-5-sonnet-20241022")
 		anthropicCfg.APIKeyEnv = "ANTHROPIC_API_KEY"
+
+		anthropicModels := []string{
+			"claude-sonnet-4-5",
+			"claude-opus-4-5",
+			"claude-3-5-sonnet-20241022",
+			"claude-3-5-haiku-20241022",
+			"claude-3-opus-20240229",
+		}
+		pick := pickModelFromList(anthropicModels, "claude-3-5-sonnet-20241022", "Chọn model Claude mặc định")
+		anthropicCfg.DefaultModel = pick
 		updateProvider(&cfg, *anthropicCfg)
-		
+
 		enabledIDs = append(enabledIDs, "anthropic")
 		enabledModels = append(enabledModels, anthropicCfg.DefaultModel)
 	} else {
 		disableProvider(&cfg, "anthropic")
 	}
 
-	// OpenCode CLI configuration
-	if enableOpenCodeCLI {
-		fmt.Println("\n\033[36m>> Cấu hình OpenCode CLI:\033[0m")
-		cmdPath := promptString(reader, "Đường dẫn command (hoặc tên command trong PATH)", "opencode")
-		
-		opencodeCfg := findOrCreateProvider(&cfg, "opencode", "opencode-cli")
-		opencodeCfg.Enabled = true
-		opencodeCfg.Command = cmdPath
-		opencodeCfg.DefaultModel = "opencode-default"
-		updateProvider(&cfg, *opencodeCfg)
-		
-		enabledIDs = append(enabledIDs, "opencode")
-		enabledModels = append(enabledModels, opencodeCfg.DefaultModel)
+	// Ollama (local) configuration
+	if enableOllama {
+		fmt.Println("\n\033[36m>> Cấu hình Ollama (local):\033[0m")
+		fmt.Println("   Cài đặt Ollama tại: https://ollama.com")
+		baseURL := promptString(reader, "Ollama base URL", "http://localhost:11434/v1")
+
+		ollamaCfg := findOrCreateProvider(&cfg, "ollama", "openai-compatible")
+		ollamaCfg.Enabled = true
+		ollamaCfg.BaseURL = baseURL
+		ollamaCfg.APIKeyEnv = ""
+
+		// Fetch live from Ollama /models
+		pick := fetchAndPickModel(baseURL, "", "", "qwen2.5-coder:7b")
+		ollamaCfg.DefaultModel = pick
+		updateProvider(&cfg, *ollamaCfg)
+
+		enabledIDs = append(enabledIDs, "ollama")
+		enabledModels = append(enabledModels, ollamaCfg.DefaultModel)
 	} else {
-		disableProvider(&cfg, "opencode")
+		disableProvider(&cfg, "ollama")
 	}
 
 	// --- 3. ROUTER CONFIG ---
 	fmt.Println("\n\033[1;33m--- 3. Định tuyến Mặc định (Default Routing) ---\033[0m")
-	
+
 	// Automatically set default provider/model based on selection
 	if len(enabledIDs) == 1 {
 		cfg.Router.DefaultProvider = enabledIDs[0]
@@ -170,7 +227,7 @@ func runSetup() error {
 	modes := []string{"hybrid", "llm", "rule"}
 	intentIdx, _ := promptSingleSelect("Chọn chế độ phân loại Intent (Intent Mode)", modes)
 	cfg.Router.IntentMode = modes[intentIdx]
-	
+
 	agentIdx, _ := promptSingleSelect("Chọn chế độ phân phối Agent (Agent Routing)", modes)
 	cfg.Router.AgentRouting = modes[agentIdx]
 
@@ -190,7 +247,7 @@ func runSetup() error {
 
 	// --- 5. CHANNELS BOTS CONFIG ---
 	fmt.Println("\n\033[1;33m--- 5. Cấu hình Chat Bots (Tùy chọn) ---\033[0m")
-	
+
 	// Telegram Bot
 	cfg.Channels.Telegram.Enabled = promptBool(reader, "Kích hoạt Telegram Bot?", false)
 	if cfg.Channels.Telegram.Enabled {
@@ -533,6 +590,128 @@ func promptSingleSelect(question string, options []string) (int, error) {
 			render()
 		case "enter":
 			return cursor, nil
+		case "ctrlc", "escape":
+			os.Exit(0)
+		}
+	}
+}
+
+// fetchAndPickModel fetches live model list from baseURL/models.
+// apiKeyDirect is used directly if non-empty (stored temporarily in env so FetchZenModels can pick it up).
+// Falls back to fallback if fetch fails or the list is empty.
+func fetchAndPickModel(baseURL, apiKeyEnv, apiKeyDirect, fallback string) string {
+	fmt.Print("\033[36m  Đang tải danh sách model...\033[0m")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	if apiKeyDirect != "" && apiKeyEnv != "" {
+		_ = os.Setenv(apiKeyEnv, apiKeyDirect)
+	}
+
+	models, err := providers.FetchZenModels(ctx, baseURL, apiKeyEnv)
+	fmt.Print("\r\033[K") // clear loading line
+
+	if err != nil || len(models) == 0 {
+		if err != nil {
+			fmt.Printf("  \033[33m[!] Không lấy được danh sách model: %v\033[0m\n", err)
+		} else {
+			fmt.Println("  \033[33m[!] Danh sách model trống\033[0m")
+		}
+		return fallback
+	}
+
+	fmt.Printf("  \033[32m[ok] Lấy được %d model\033[0m\n", len(models))
+	return pickModelFromList(models, fallback, "Chọn model mặc định")
+}
+
+// pickModelFromList shows an interactive ↑/↓ select over a list of model names.
+func pickModelFromList(models []string, defaultModel, question string) string {
+	if len(models) == 0 {
+		return defaultModel
+	}
+
+	start := 0
+	for i, m := range models {
+		if m == defaultModel {
+			start = i
+			break
+		}
+	}
+
+	cleanup, err := setTerminalRaw()
+	if err != nil {
+		return defaultModel
+	}
+	defer cleanup()
+
+	cursor := start
+	fmt.Printf("\033[1;36m%s\033[0m (↑/↓ di chuyển, Enter để chọn)\n", question)
+	printedLines := 0
+
+	fmt.Print("\033[?25l")
+	defer fmt.Print("\033[?25h")
+
+	render := func() {
+		if printedLines > 0 {
+			fmt.Print(strings.Repeat("\033[F\033[K", printedLines))
+		}
+		printedLines = 0
+
+		winStart := cursor - 4
+		if winStart < 0 {
+			winStart = 0
+		}
+		winEnd := winStart + 10
+		if winEnd > len(models) {
+			winEnd = len(models)
+			winStart = winEnd - 10
+			if winStart < 0 {
+				winStart = 0
+			}
+		}
+
+		if winStart > 0 {
+			fmt.Printf("  \033[2m... %d model phía trên\033[0m\n", winStart)
+			printedLines++
+		}
+		for i := winStart; i < winEnd; i++ {
+			prefix := "  "
+			suffix := ""
+			if i == cursor {
+				prefix = "\033[33m> \033[0m"
+				suffix = " \033[32m✓\033[0m"
+			}
+			fmt.Printf("%s%s%s\n", prefix, models[i], suffix)
+			printedLines++
+		}
+		if winEnd < len(models) {
+			fmt.Printf("  \033[2m... %d model phía dưới\033[0m\n", len(models)-winEnd)
+			printedLines++
+		}
+	}
+
+	render()
+
+	for {
+		key, err := readKey()
+		if err != nil {
+			return models[cursor]
+		}
+		switch key {
+		case "up":
+			if cursor > 0 {
+				cursor--
+			}
+			render()
+		case "down":
+			if cursor < len(models)-1 {
+				cursor++
+			}
+			render()
+		case "enter":
+			fmt.Printf("\033[32m  ✓ Đã chọn: %s\033[0m\n", models[cursor])
+			return models[cursor]
 		case "ctrlc", "escape":
 			os.Exit(0)
 		}

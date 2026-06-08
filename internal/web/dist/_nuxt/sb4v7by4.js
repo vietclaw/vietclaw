@@ -1,1 +1,0 @@
-import{_ as t}from"./bu5jx2kH.js";import{g as e,s as n,o as _}from"./NjXF5wxW.js";import"./CzbNxWSh.js";const f=e({__name:"chat",setup(a){return(c,r)=>{const o=t;return _(),n(o)}}});export{f as default};

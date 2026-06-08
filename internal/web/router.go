@@ -27,6 +27,7 @@ func NewRouter(application *app.App) http.Handler {
 	mux.HandleFunc("GET /api/costs/today", handleCostsToday(application))
 	mux.HandleFunc("GET /api/budget", handleBudget(application))
 	mux.HandleFunc("GET /api/providers", handleProviders(application))
+	mux.HandleFunc("GET /api/providers/{id}/models", handleProviderModels(application))
 	mux.HandleFunc("GET /api/channels", handleChannels(application))
 	mux.HandleFunc("POST /api/channels/discord/test", handleDiscordTest(application))
 	mux.HandleFunc("POST /api/channels/telegram/test", handleTelegramTest(application))

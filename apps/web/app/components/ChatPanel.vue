@@ -1,61 +1,41 @@
 <script setup lang="ts">
-import type { ChatResponse } from '~/types'
-import { apiFetch, formatMoney } from '~/utils/api'
+import { ArrowUp, RefreshCw, Copy, Terminal, Wrench, CheckCircle2, AlertCircle } from '@lucide/vue'
+import { marked } from 'marked'
+import hljs from 'highlight.js'
 
-type ChatItem = {
-  role: 'user' | 'assistant'
-  text: string
-  meta?: Pick<ChatResponse, 'intent' | 'provider' | 'model' | 'cost_usd'>
+const { currentSession, isGenerating, sendMessage, clearSessionMessages } = useChat()
+const toast = useToast()
+
+const chatInput = ref('')
+const chatBox = ref<HTMLElement | null>(null)
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+marked.setOptions({ breaks: true, gfm: true })
+
+function renderMarkdown(text: string): string {
+  try { return marked.parse(text) as string } catch { return text }
 }
 
-const props = withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
+function autoResize(el: HTMLTextAreaElement) {
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 192) + 'px'
+}
 
-const message = ref('')
-const mode = ref('eco')
-const loading = ref(false)
-const error = ref('')
-const sessionId = ref('')
-const chatBox = ref<HTMLElement | null>(null)
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    handleSend()
+  }
+}
 
-const items = ref<ChatItem[]>([
-  { role: 'assistant', text: 'hỏi t gì đó. t sẽ giữ context ngắn thôi.' }
-])
-
-async function send() {
-  const text = message.value.trim()
-  if (!text || loading.value) return
-  error.value = ''
-  items.value.push({ role: 'user', text })
-  message.value = ''
-  loading.value = true
+async function handleSend() {
+  const text = chatInput.value.trim()
+  if (!text || isGenerating.value) return
+  chatInput.value = ''
+  if (textareaRef.value) textareaRef.value.style.height = 'auto'
+  await sendMessage(text)
   await nextTick()
   scrollToBottom()
-  try {
-    const response = await apiFetch<ChatResponse>('/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({
-        session_id: sessionId.value || undefined,
-        user_id: 'local',
-        channel: 'web',
-        message: text,
-        mode: mode.value
-      })
-    })
-    sessionId.value = response.session_id
-    items.value.push({
-      role: 'assistant',
-      text: response.reply || response.error || 't chưa có câu trả lời.',
-      meta: response
-    })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'chat failed'
-    error.value = msg
-    items.value.push({ role: 'assistant', text: msg })
-  } finally {
-    loading.value = false
-    await nextTick()
-    scrollToBottom()
-  }
 }
 
 function scrollToBottom() {
@@ -64,119 +44,248 @@ function scrollToBottom() {
   }
 }
 
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Enter' && !event.shiftKey) {
-    event.preventDefault()
-    void send()
-  }
+function highlightCode(el: Element) {
+  el.querySelectorAll('pre code').forEach((block) => {
+    hljs.highlightElement(block as HTMLElement)
+  })
 }
+
+async function copyMessage(text: string) {
+  await window.navigator.clipboard.writeText(text)
+  toast.add('Copied', 'success')
+}
+
+const session = computed(() => currentSession())
+const messages = computed(() => session.value?.messages || [])
 </script>
 
 <template>
-  <section class="vc-bezel vc-noise vc-ambient" :class="compact ? 'h-[520px]' : 'h-[680px]'">
-    <div class="vc-bezel-inner flex flex-col overflow-hidden">
-      <!-- Header -->
-      <div class="relative z-10 flex items-center justify-between border-b border-[var(--border-0)] px-5 py-4">
-        <div class="flex items-center gap-3">
-          <div class="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--accent)]/15 to-purple-500/10">
-            <svg class="h-4 w-4 text-[var(--accent-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </div>
-          <div>
-            <h2 class="text-[13px] font-bold text-[var(--fg-0)]">Chat</h2>
-            <p class="text-[11px] text-[var(--fg-2)]">Ask VietClaw anything</p>
-          </div>
+  <div class="flex-1 flex flex-col h-full">
+    <!-- Chat Messages -->
+    <div
+      ref="chatBox"
+      class="flex-1 overflow-y-auto p-4 md:p-6 vc-scrollbar"
+      @vue:mounted="(el: any) => { if (el?.$el) highlightCode(el.$el) }"
+    >
+      <!-- Empty State -->
+      <div
+        v-if="messages.length === 0"
+        class="max-w-xl mx-auto h-full flex flex-col justify-center py-20 px-4 text-center"
+      >
+        <div class="w-10 h-10 rounded border border-zinc-800 bg-zinc-900/40 flex items-center justify-center mx-auto mb-4">
+          <Terminal :size="20" class="text-zinc-400" />
         </div>
-        <select v-model="mode" class="rounded-lg border border-[var(--border-1)] bg-[var(--bg-2)]/80 px-2.5 py-1.5 text-[11px] font-semibold text-[var(--fg-1)] vc-focus vc-transition-fast hover:border-[var(--border-2)]">
-          <option value="eco">eco</option>
-          <option value="smart" disabled>smart</option>
-          <option value="max" disabled>max</option>
-        </select>
-      </div>
+        <h3 class="text-sm font-semibold tracking-tight text-zinc-200 mb-1">VietClaw Workspace</h3>
+        <p class="text-zinc-500 text-xs max-w-sm mx-auto mb-6">Lightweight agent workspace. Ask anything or use tools.</p>
 
-      <!-- Messages -->
-      <div ref="chatBox" class="vc-scrollbar relative z-10 flex-1 overflow-y-auto px-5 py-5">
-        <div class="space-y-5">
-          <TransitionGroup name="msg">
-            <div
-              v-for="(item, index) in items"
-              :key="index"
-              class="flex gap-3"
-              :class="item.role === 'user' ? 'flex-row-reverse' : ''"
-            >
-              <!-- Avatar -->
-              <div
-                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[11px] font-bold vc-transition"
-                :class="item.role === 'user'
-                  ? 'bg-gradient-to-br from-[var(--accent)] to-[var(--accent-dim)] text-white shadow-lg shadow-[var(--accent)]/20'
-                  : 'bg-[var(--bg-3)] text-[var(--fg-2)]'"
-              >
-                {{ item.role === 'user' ? 'U' : 'V' }}
-              </div>
-              <!-- Bubble -->
-              <div
-                class="max-w-[78%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed vc-transition"
-                :class="item.role === 'user'
-                  ? 'bg-gradient-to-br from-[var(--accent)] to-[var(--accent-dim)] text-white rounded-tr-md shadow-lg shadow-[var(--accent)]/15'
-                  : 'bg-[var(--bg-2)] text-[var(--fg-0)] rounded-tl-md border border-[var(--border-0)]'"
-              >
-                <p class="whitespace-pre-wrap">{{ item.text }}</p>
-                <div v-if="item.meta" class="mt-2.5 flex flex-wrap gap-1.5 border-t border-white/10 pt-2.5 text-[10px] font-medium opacity-50">
-                  <span>{{ item.meta.intent }}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{{ item.meta.provider }}/{{ item.meta.model }}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{{ formatMoney(item.meta.cost_usd) }}</span>
-                </div>
-              </div>
-            </div>
-          </TransitionGroup>
-
-          <!-- Typing indicator -->
-          <div v-if="loading" class="flex gap-3">
-            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--bg-3)] text-[11px] font-bold text-[var(--fg-2)]">V</div>
-            <div class="flex items-center gap-1.5 rounded-2xl rounded-tl-md bg-[var(--bg-2)] border border-[var(--border-0)] px-5 py-3.5">
-              <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--fg-2)] [animation-delay:-0.3s]" />
-              <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--fg-2)] [animation-delay:-0.15s]" />
-              <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--fg-2)]" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Input -->
-      <div class="relative z-10 border-t border-[var(--border-0)] p-4">
-        <p v-if="error" class="mb-3 rounded-xl border border-[var(--danger)]/20 bg-[var(--danger)]/5 px-3.5 py-2.5 text-[12px] font-medium text-[var(--danger)]">{{ error }}</p>
-        <div class="flex items-end gap-2.5">
-          <textarea
-            v-model="message"
-            rows="1"
-            placeholder="Type a message..."
-            class="min-h-[42px] max-h-[120px] flex-1 resize-none rounded-xl border border-[var(--border-1)] bg-[var(--bg-2)]/80 px-4 py-3 text-[13px] text-[var(--fg-0)] placeholder:text-[var(--fg-2)]/40 vc-focus vc-transition-fast hover:border-[var(--border-2)] focus:border-[var(--accent)]/30 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)]"
-            @keydown="onKeydown"
-          />
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 max-w-md mx-auto text-left">
           <button
-            class="group flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-dim)] text-white vc-transition vc-focus disabled:opacity-30 disabled:active:scale-100"
-            :disabled="loading || !message.trim()"
-            @click="send"
+            class="p-3 rounded border border-zinc-900 bg-zinc-950/40 hover:border-zinc-700 cursor-pointer transition-all text-left"
+            @click="chatInput = 'Giải thích về kiến trúc microservices'; autoResize($refs.textareaRef as any)"
           >
-            <svg class="h-4 w-4 vc-transition-fast group-hover:translate-x-0.5 group-hover:-translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19V5m0 0l-4 4m4-4l4 4" />
-            </svg>
+            <h4 class="text-xs font-mono text-zinc-300 flex items-center gap-1.5">
+              <Terminal :size="14" class="text-zinc-500" /> microservices
+            </h4>
+            <p class="text-[10px] text-zinc-500 mt-1">Giải thích kiến trúc microservices...</p>
+          </button>
+          <button
+            class="p-3 rounded border border-zinc-900 bg-zinc-950/40 hover:border-zinc-700 cursor-pointer transition-all text-left"
+            @click="chatInput = 'Tìm thông tin về Go 1.25 release'; autoResize($refs.textareaRef as any)"
+          >
+            <h4 class="text-xs font-mono text-zinc-300 flex items-center gap-1.5">
+              <Terminal :size="14" class="text-zinc-500" /> go_release
+            </h4>
+            <p class="text-[10px] text-zinc-500 mt-1">Tìm thông tin Go 1.25...</p>
+          </button>
+          <button
+            class="p-3 rounded border border-zinc-900 bg-zinc-950/40 hover:border-zinc-700 cursor-pointer transition-all text-left"
+            @click="chatInput = 'Đọc file config.json trong workspace'; autoResize($refs.textareaRef as any)"
+          >
+            <h4 class="text-xs font-mono text-zinc-300 flex items-center gap-1.5">
+              <Terminal :size="14" class="text-zinc-500" /> read_file
+            </h4>
+            <p class="text-[10px] text-zinc-500 mt-1">Đọc file từ workspace...</p>
+          </button>
+          <button
+            class="p-3 rounded border border-zinc-900 bg-zinc-950/40 hover:border-zinc-700 cursor-pointer transition-all text-left"
+            @click="chatInput = 'Tìm file có chứa từ khóa error trong workspace'; autoResize($refs.textareaRef as any)"
+          >
+            <h4 class="text-xs font-mono text-zinc-300 flex items-center gap-1.5">
+              <Terminal :size="14" class="text-zinc-500" /> grep_files
+            </h4>
+            <p class="text-[10px] text-zinc-500 mt-1">Tìm kiếm trong workspace...</p>
           </button>
         </div>
       </div>
+
+      <!-- Messages -->
+      <div class="space-y-6 max-w-3xl mx-auto">
+        <div
+          v-for="(msg, idx) in messages"
+          :key="idx"
+          class="flex gap-4"
+          :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
+        >
+          <!-- AI Avatar -->
+          <div
+            v-if="msg.role === 'assistant'"
+            class="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center shrink-0 text-zinc-950"
+          >
+            <span class="text-[9px] font-bold">AI</span>
+          </div>
+
+          <!-- User Bubble -->
+          <div
+            v-if="msg.role === 'user'"
+            class="px-3.5 py-2.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm max-w-[85%] leading-relaxed"
+          >
+            <p class="whitespace-pre-wrap">{{ msg.text }}</p>
+          </div>
+
+          <!-- Assistant Bubble -->
+          <div
+            v-else
+            class="max-w-[85%] space-y-2"
+          >
+            <!-- Step-by-step execution -->
+            <div v-if="msg.steps.length > 0" class="space-y-1.5">
+              <template v-for="(step, si) in msg.steps" :key="si">
+                <!-- Tool Call -->
+                <div
+                  v-if="step.type === 'tool_call'"
+                  class="flex items-center gap-2 px-3 py-1.5 rounded bg-amber-950/20 border border-amber-900/20 text-[11px]"
+                >
+                  <Wrench :size="12" class="text-amber-400 shrink-0" />
+                  <span class="text-amber-300 font-mono font-medium">{{ step.toolName }}</span>
+                  <span class="text-zinc-500 truncate">{{ step.toolInput }}</span>
+                </div>
+
+                <!-- Tool Result -->
+                <div
+                  v-else-if="step.type === 'tool_result'"
+                  class="flex items-start gap-2 px-3 py-1.5 rounded bg-emerald-950/20 border border-emerald-900/20 text-[11px]"
+                >
+                  <CheckCircle2 :size="12" class="text-emerald-400 shrink-0 mt-0.5" />
+                  <span class="text-emerald-300/80 font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto">{{ step.toolResult }}</span>
+                </div>
+
+                <!-- Error -->
+                <div
+                  v-else-if="step.type === 'error'"
+                  class="flex items-center gap-2 px-3 py-1.5 rounded bg-rose-950/20 border border-rose-900/20 text-[11px]"
+                >
+                  <AlertCircle :size="12" class="text-rose-400 shrink-0" />
+                  <span class="text-rose-300">{{ step.error }}</span>
+                </div>
+
+                <!-- Text (streamed) -->
+                <div
+                  v-else-if="step.type === 'text' && step.text"
+                  class="text-sm text-zinc-300 leading-relaxed prose prose-invert"
+                  v-html="renderMarkdown(step.text)"
+                  v-html-hook="highlightCode"
+                />
+              </template>
+            </div>
+
+            <!-- Final text response (if no steps or text accumulated outside steps) -->
+            <div
+              v-if="msg.text && msg.steps.filter(s => s.type === 'text').length === 0"
+              class="px-4 py-3 rounded bg-zinc-950/40 border border-zinc-900 text-sm prose prose-invert"
+              v-html="renderMarkdown(msg.text)"
+              v-html-hook="highlightCode"
+            />
+
+            <!-- Meta line -->
+            <div
+              v-if="msg.text || msg.steps.length > 0"
+              class="flex items-center gap-3.5 pt-1 text-[10px] text-zinc-500"
+            >
+              <button
+                class="flex items-center gap-1 hover:text-zinc-300 transition-colors"
+                @click="copyMessage(msg.text)"
+              >
+                <Copy :size="12" /> [COPY]
+              </button>
+            </div>
+          </div>
+
+          <!-- User Avatar -->
+          <div
+            v-if="msg.role === 'user'"
+            class="w-7 h-7 rounded border border-zinc-800 bg-zinc-900 flex items-center justify-center shrink-0"
+          >
+            <span class="text-[9px] font-semibold text-zinc-500">USR</span>
+          </div>
+        </div>
+
+        <!-- Typing Indicator -->
+        <div v-if="isGenerating" class="flex gap-4 justify-start items-center">
+          <div class="w-7 h-7 rounded border border-zinc-800 bg-zinc-950 flex items-center justify-center shrink-0">
+            <span class="text-[9px] text-zinc-500">SYS</span>
+          </div>
+          <div class="px-3.5 py-2 rounded bg-zinc-950/20 border border-zinc-900 text-zinc-500 text-xs flex items-center gap-2">
+            <div class="flex space-x-1">
+              <span class="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style="animation-delay: 0.1s" />
+              <span class="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style="animation-delay: 0.2s" />
+              <span class="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style="animation-delay: 0.3s" />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-  </section>
+
+    <!-- Input Area -->
+    <div class="p-4 md:p-6 bg-gradient-to-t from-zinc-950/80 to-transparent border-t border-zinc-800/10 z-20">
+      <div class="max-w-3xl mx-auto relative">
+        <div class="rounded-lg border border-zinc-800 bg-zinc-900/30 focus-within:border-zinc-700 transition-colors p-2 flex flex-col">
+          <textarea
+            ref="textareaRef"
+            v-model="chatInput"
+            rows="1"
+            placeholder="Type a message..."
+            class="w-full bg-transparent text-zinc-200 placeholder-zinc-600 focus:outline-none resize-none max-h-48 min-h-[32px] px-2 py-1 text-sm leading-relaxed"
+            @input="autoResize($event.target as HTMLTextAreaElement)"
+            @keydown="onKeydown"
+          />
+
+          <div class="flex items-center justify-between pt-2 px-1 border-t border-zinc-800/40 mt-1">
+            <div class="flex items-center gap-1" />
+
+            <div class="flex items-center gap-2">
+              <button
+                class="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+                title="Reset Session"
+                @click="clearSessionMessages()"
+              >
+                <RefreshCw :size="14" />
+              </button>
+              <button
+                class="flex items-center justify-center w-7 h-7 rounded bg-zinc-100 hover:bg-zinc-200 text-zinc-950 transition-colors disabled:opacity-30"
+                :disabled="isGenerating || !chatInput.trim()"
+                @click="handleSend"
+              >
+                <ArrowUp :size="16" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
-<style scoped>
-.msg-enter-active {
-  transition: all 0.5s var(--ease-out);
+<script lang="ts">
+export default {
+  directives: {
+    htmlHook: {
+      mounted(el: HTMLElement, binding: any) {
+        if (binding.value) binding.value(el)
+      },
+      updated(el: HTMLElement, binding: any) {
+        if (binding.value) binding.value(el)
+      }
+    }
+  }
 }
-.msg-enter-from {
-  opacity: 0;
-  transform: translateY(12px) blur(4px);
-}
-</style>
+</script>

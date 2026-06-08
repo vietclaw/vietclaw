@@ -65,9 +65,24 @@ func handleAPIChatStream(application *app.App) http.HandlerFunc {
 				flusher.Flush()
 				break
 			}
-			if chunk.Text != "" {
-				writeSSEJSON(w, "", map[string]string{"text": chunk.Text})
+			switch chunk.Event {
+			case "tool_call":
+				writeSSEJSON(w, "tool_call", map[string]string{
+					"name":  chunk.ToolName,
+					"input": chunk.ToolInput,
+				})
 				flusher.Flush()
+			case "tool_result":
+				writeSSEJSON(w, "tool_result", map[string]string{
+					"name":   chunk.ToolName,
+					"result": chunk.ToolResult,
+				})
+				flusher.Flush()
+			default:
+				if chunk.Text != "" {
+					writeSSEJSON(w, "text", map[string]string{"text": chunk.Text})
+					flusher.Flush()
+				}
 			}
 		}
 	}

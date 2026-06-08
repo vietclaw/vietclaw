@@ -34,6 +34,37 @@ func handleProviders(application *app.App) http.HandlerFunc {
 	}
 }
 
+// handleProviderModels fetches the available model list for a configured provider.
+// It proxies to the provider's /models endpoint (OpenAI-compatible format).
+func handleProviderModels(application *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		providerID := r.PathValue("id")
+		var found *struct {
+			baseURL   string
+			apiKeyEnv string
+		}
+		for _, cfg := range application.Config.Providers {
+			if cfg.ID == providerID {
+				found = &struct {
+					baseURL   string
+					apiKeyEnv string
+				}{baseURL: cfg.BaseURL, apiKeyEnv: cfg.APIKeyEnv}
+				break
+			}
+		}
+		if found == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "provider not found: " + providerID})
+			return
+		}
+		models, err := providers.FetchZenModels(r.Context(), found.baseURL, found.apiKeyEnv)
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"models": models})
+	}
+}
+
 func handleChannels(application *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if application.Channels != nil {

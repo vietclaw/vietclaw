@@ -1,7 +1,7 @@
 <script setup lang="ts">
-definePageMeta({ title: 'Chat' })
+navigateTo('/', { replace: true })
 </script>
 
 <template>
-  <ChatPanel />
+  <div />
 </template>

@@ -1,1 +1,0 @@
-async function o(t,r={}){const a=await fetch(t,{...r,headers:{"content-type":"application/json",...r.headers||{}}});if(!a.ok){let e=a.statusText;try{e=(await a.json()).error||e}catch{}throw new Error(e)}return await a.json()}function s(t){return t?`$${t.toFixed(4)}`:"$0.0000"}export{o as a,s as f};

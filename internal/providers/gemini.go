@@ -69,18 +69,14 @@ func (p *Gemini) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error
 		genConfig.SystemInstruction = systemInstruction
 	}
 
-	var tools []*genai.Tool
 	if len(req.Tools) > 0 {
 		var err error
-		tools, err = geminiToolsFromChat(req.Tools)
+		tools, err := geminiToolsFromChat(req.Tools)
 		if err != nil {
 			return ChatResponse{Provider: p.ID(), Model: req.Model, RawError: err.Error()}, err
 		}
+		genConfig.Tools = tools
 	}
-	tools = append(tools, &genai.Tool{
-		GoogleSearch: &genai.GoogleSearch{},
-	})
-	genConfig.Tools = tools
 
 	resp, err := client.Models.GenerateContent(ctx, model, contents, genConfig)
 	if err != nil {
@@ -157,18 +153,13 @@ func (p *Gemini) ChatStream(ctx context.Context, req ChatRequest) (<-chan Stream
 		genConfig.SystemInstruction = systemInstruction
 	}
 
-	var streamTools []*genai.Tool
 	if len(req.Tools) > 0 {
-		var err error
-		streamTools, err = geminiToolsFromChat(req.Tools)
+		streamTools, err := geminiToolsFromChat(req.Tools)
 		if err != nil {
 			return nil, err
 		}
+		genConfig.Tools = streamTools
 	}
-	streamTools = append(streamTools, &genai.Tool{
-		GoogleSearch: &genai.GoogleSearch{},
-	})
-	genConfig.Tools = streamTools
 
 	ch := make(chan StreamChunk, 32)
 	go func() {
@@ -178,7 +169,7 @@ func (p *Gemini) ChatStream(ctx context.Context, req ChatRequest) (<-chan Stream
 				ch <- StreamChunk{Error: err.Error()}
 				return
 			}
-			
+
 			var chunkText string
 			var chunkToolCalls []ToolCall
 			if len(result.Candidates) > 0 && result.Candidates[0].Content != nil {

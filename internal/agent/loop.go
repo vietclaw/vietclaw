@@ -61,6 +61,7 @@ func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID str
 	var finalProvider string
 	var finalModel string
 	var totalCost float64
+	var accumulatedText string
 
 	for step := 1; step <= s.maxAgentSteps(); step++ {
 		providerResp, nextSelection, nextExcluded, err := s.chatWithFallback(ctx, chatReq, selection, excludedProviders)
@@ -83,14 +84,17 @@ func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID str
 		totalCost += providerResp.EstimatedCostUSD
 		finalProvider = providerResp.Provider
 		finalModel = providerResp.Model
+		if providerResp.Text != "" {
+			accumulatedText += providerResp.Text
+		}
 
 		if len(providerResp.ToolCalls) > 0 {
 			chatReq.Messages = append(chatReq.Messages, providers.Message{
 				Role:      RoleAssistant,
-				Content:   providerResp.Text,
+				Content:   accumulatedText,
 				ToolCalls: providerResp.ToolCalls,
 			})
-			if err := s.addMessage(ctx, req.SessionID, RoleAssistant, providerResp.Text); err != nil {
+			if err := s.addMessage(ctx, req.SessionID, RoleAssistant, accumulatedText); err != nil {
 				return ChatResponse{}, err
 			}
 			if err := s.executeToolCalls(ctx, req.SessionID, providerResp.ToolCalls, &chatReq); err != nil {
@@ -99,7 +103,7 @@ func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID str
 			continue
 		}
 
-		finalReply = providerResp.Text
+		finalReply = accumulatedText
 		break
 	}
 
@@ -154,7 +158,7 @@ func (s *Service) StreamAgenticLoop(ctx context.Context, req ChatRequest, runID 
 		var finalProvider string
 		var finalModel string
 		var totalCost float64
-		var currentAssistantMessage string
+		var accumulatedText string
 
 		for step := 1; step <= s.maxAgentSteps(); step++ {
 			attempt, nextSelection, nextExcluded, err := s.streamWithFallback(ctx, ch, chatReq, selection, excludedProviders)
@@ -169,49 +173,59 @@ func (s *Service) StreamAgenticLoop(ctx context.Context, req ChatRequest, runID 
 
 			finalProvider = selection.Provider.ID()
 			finalModel = selection.Model
-			currentAssistantMessage = attempt.text
+			if attempt.text != "" {
+				accumulatedText += attempt.text
+			}
 
 			tempReq := chatReq
-			tempReq.MaxOutputTokens = providers.EstimateTokens(currentAssistantMessage)
+			tempReq.MaxOutputTokens = providers.EstimateTokens(accumulatedText)
 			totalCost += selection.Provider.EstimateCost(tempReq).EstimatedCostUSD
 
 			if len(attempt.toolCalls) > 0 {
 				chatReq.Messages = append(chatReq.Messages, providers.Message{
 					Role:      RoleAssistant,
-					Content:   currentAssistantMessage,
+					Content:   accumulatedText,
 					ToolCalls: attempt.toolCalls,
 				})
-				if err := s.addMessage(ctx, req.SessionID, RoleAssistant, currentAssistantMessage); err != nil {
+				if err := s.addMessage(ctx, req.SessionID, RoleAssistant, accumulatedText); err != nil {
 					ch <- providers.StreamChunk{Error: err.Error()}
 					return
 				}
 
 				for _, tc := range attempt.toolCalls {
-					ch <- providers.StreamChunk{Text: s.text(i18n.AgentToolStatus, tc.Function.Name)}
+					ch <- providers.StreamChunk{
+						Event:     "tool_call",
+						ToolName:  tc.Function.Name,
+						ToolInput: tc.Function.Arguments,
+					}
 					toolResult, err := s.executeToolCall(ctx, req.SessionID, tc, &chatReq)
 					if err != nil {
 						ch <- providers.StreamChunk{Error: err.Error()}
 						return
 					}
-					ch <- providers.StreamChunk{Text: s.text(i18n.AgentToolResult, toolResult)}
+					ch <- providers.StreamChunk{
+						Event:      "tool_result",
+						ToolName:   tc.Function.Name,
+						ToolResult: toolResult,
+					}
 				}
 				continue
 			}
 			break
 		}
 
-		if currentAssistantMessage == "" {
-			currentAssistantMessage = s.text(i18n.AgentMaxStepsReached)
-			ch <- providers.StreamChunk{Text: currentAssistantMessage}
+		if accumulatedText == "" {
+			accumulatedText = s.text(i18n.AgentMaxStepsReached)
+			ch <- providers.StreamChunk{Event: "text", Text: accumulatedText}
 		}
 
-		_ = s.addMessage(ctx, req.SessionID, RoleAssistant, currentAssistantMessage)
+		_ = s.addMessage(ctx, req.SessionID, RoleAssistant, accumulatedText)
 		_ = s.insertCost(ctx, providers.ChatResponse{
 			Provider:         finalProvider,
 			Model:            finalModel,
 			EstimatedCostUSD: totalCost,
 		})
-		_ = s.finishRun(ctx, runID, RunStatusCompleted, currentAssistantMessage, finalProvider, finalModel)
+		_ = s.finishRun(ctx, runID, RunStatusCompleted, accumulatedText, finalProvider, finalModel)
 		ch <- providers.StreamChunk{Done: true}
 	}()
 
@@ -330,7 +344,7 @@ func (s *Service) streamWithFallback(ctx context.Context, out chan<- providers.S
 			}
 			if chunk.Text != "" {
 				attempt.text += chunk.Text
-				out <- providers.StreamChunk{Text: chunk.Text}
+				out <- providers.StreamChunk{Event: "text", Text: chunk.Text}
 			}
 			if len(chunk.ToolCalls) > 0 {
 				attempt.toolCalls = append(attempt.toolCalls, chunk.ToolCalls...)

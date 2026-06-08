@@ -14,6 +14,7 @@ const (
 	TypeGemini           = "gemini"
 	TypeCustomHTTP       = "http"
 	TypeOpenCodeCLI      = "opencode-cli"
+	TypeOpenCodeZen      = "opencode-zen"
 
 	DefaultMockID    = "mock"
 	DefaultMockModel = "mock-small"
@@ -71,10 +72,14 @@ type ChatResponse struct {
 }
 
 type StreamChunk struct {
-	Text      string     `json:"text"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
-	Done      bool       `json:"done"`
-	Error     string     `json:"error,omitempty"`
+	Event      string     `json:"event,omitempty"`
+	Text       string     `json:"text"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ToolName   string     `json:"tool_name,omitempty"`
+	ToolInput  string     `json:"tool_input,omitempty"`
+	ToolResult string     `json:"tool_result,omitempty"`
+	Done       bool       `json:"done"`
+	Error      string     `json:"error,omitempty"`
 }
 
 type CostEstimate struct {

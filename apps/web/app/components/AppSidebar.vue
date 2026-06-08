@@ -1,85 +1,99 @@
 <script setup lang="ts">
+import { Terminal, Plus, Settings, ChevronRight, Trash2 } from '@lucide/vue'
+
 defineProps<{ open: boolean }>()
 defineEmits<{ close: [] }>()
 
-const route = useRoute()
+const { sessions, currentSessionId, createSession, switchSession, deleteSession } = useChat()
 
-const items = [
-  { label: 'Overview', to: '/', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2' },
-  { label: 'Chat', to: '/chat', icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' },
-  { label: 'Memory', to: '/memory', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547' },
-  { label: 'Sessions', to: '/sessions', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-  { label: 'Providers', to: '/providers', icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' },
-  { label: 'Budget', to: '/budget', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-  { label: 'Channels', to: '/channels', icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1' },
-  { label: 'Logs', to: '/logs', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }
-]
+const settingsOpen = useState('settingsOpen', () => false)
+
+function toggleSettings() {
+  settingsOpen.value = !settingsOpen.value
+}
 </script>
 
 <template>
   <aside
-    class="fixed inset-y-0 left-0 z-50 flex w-[240px] flex-col transition-all duration-500 lg:translate-x-0"
-    :class="open ? 'translate-x-0' : '-translate-x-full'"
+    class="w-72 bg-zinc-950/80 border-r border-zinc-800/80 flex flex-col h-full transition-transform duration-200 md:translate-x-0 -translate-x-full fixed md:relative z-30 backdrop-blur-md"
+    :class="open ? 'translate-x-0' : ''"
   >
-    <!-- Glass background -->
-    <div class="absolute inset-0 bg-[var(--bg-1)]/80 backdrop-blur-2xl border-r border-[var(--border-0)]" />
-
-    <div class="relative z-10 flex h-full flex-col">
-      <!-- Logo -->
-      <div class="flex h-16 items-center gap-3 px-5">
-        <div class="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--accent)] to-purple-500 shadow-lg shadow-[var(--accent)]/20">
-          <svg class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
+    <!-- Logo Header -->
+    <div class="p-4 border-b border-zinc-800/60 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-950">
+          <Terminal :size="16" />
         </div>
         <div>
-          <span class="text-[14px] font-bold tracking-tight text-[var(--fg-0)]">VietClaw</span>
-          <span class="ml-1.5 inline-flex items-center rounded-md bg-[var(--accent)]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[var(--accent-light)]">v0.1</span>
+          <h1 class="text-sm font-semibold tracking-tight text-zinc-100">vietclaw.console</h1>
+          <p class="text-[9px] text-zinc-500 font-mono">v0.1.0</p>
         </div>
       </div>
+      <button class="md:hidden p-1 rounded hover:bg-zinc-900 text-zinc-400" @click="$emit('close')">
+        <X :size="16" />
+      </button>
+    </div>
 
-      <!-- Divider -->
-      <div class="mx-4 h-px bg-gradient-to-r from-transparent via-[var(--border-1)] to-transparent" />
+    <!-- Action Button -->
+    <div class="p-3">
+      <button
+        class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors"
+        @click="createSession()"
+      >
+        <Plus :size="14" />
+        <span>New Session</span>
+      </button>
+    </div>
 
-      <!-- Nav -->
-      <nav class="flex-1 overflow-y-auto px-3 py-4 vc-scrollbar">
-        <NuxtLink
-          v-for="item in items"
-          :key="item.to"
-          :to="item.to"
-          class="group mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-[var(--fg-2)] vc-transition-fast vc-focus"
-          :class="route.path === item.to
-            ? 'bg-[var(--accent)]/10 text-[var(--accent-light)] shadow-sm shadow-[var(--accent)]/5'
-            : 'hover:bg-[var(--bg-3)]/60 hover:text-[var(--fg-1)]'"
+    <!-- History Feed -->
+    <div class="flex-1 overflow-y-auto px-2 py-3 space-y-1 vc-scrollbar">
+      <div class="flex items-center justify-between px-2 mb-2">
+        <span class="text-[10px] font-medium text-zinc-400 uppercase tracking-wider">Active Sessions</span>
+      </div>
+      <div class="space-y-0.5">
+        <div
+          v-for="session in sessions"
+          :key="session.id"
+          class="group flex items-center justify-between p-2 rounded cursor-pointer transition-all"
+          :class="session.id === currentSessionId
+            ? 'bg-zinc-900 border border-zinc-800'
+            : 'hover:bg-zinc-950 border border-transparent'"
+          @click="switchSession(session.id)"
         >
-          <svg
-            class="h-[18px] w-[18px] shrink-0 vc-transition-fast"
-            :class="route.path === item.to ? 'text-[var(--accent-light)]' : 'text-[var(--fg-2)] group-hover:text-[var(--fg-1)]'"
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" :d="item.icon" />
-          </svg>
-          {{ item.label }}
-          <div
-            v-if="route.path === item.to"
-            class="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--accent)] vc-pulse-dot"
-          />
-        </NuxtLink>
-      </nav>
-
-      <!-- Footer -->
-      <div class="border-t border-[var(--border-0)] p-3">
-        <div class="rounded-xl bg-[var(--bg-2)]/60 px-3.5 py-3">
-          <div class="flex items-center gap-2">
-            <div class="relative">
-              <div class="h-2 w-2 rounded-full bg-[var(--success)]" />
-              <div class="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-[var(--success)] opacity-40" />
-            </div>
-            <span class="text-[11px] font-semibold text-[var(--fg-1)]">System online</span>
+          <div class="flex items-center gap-2 overflow-hidden flex-1">
+            <Terminal
+              :size="14"
+              :class="session.id === currentSessionId ? 'text-zinc-100' : 'text-zinc-600'"
+              class="shrink-0"
+            />
+            <span
+              class="text-xs truncate"
+              :class="session.id === currentSessionId ? 'text-zinc-200 font-medium' : 'text-zinc-400'"
+            >{{ session.title }}</span>
           </div>
-          <div class="mt-1.5 text-[10px] font-medium text-[var(--fg-2)]">Go + SQLite</div>
+          <button
+            v-if="sessions.length > 1"
+            class="p-0.5 rounded hover:bg-zinc-800 text-zinc-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"
+            @click.stop="deleteSession(session.id)"
+          >
+            <Trash2 :size="14" />
+          </button>
         </div>
       </div>
+    </div>
+
+    <!-- Control Panel Footer -->
+    <div class="p-3 border-t border-zinc-800/60 bg-zinc-950/40">
+      <button
+        class="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 transition-colors"
+        @click="toggleSettings"
+      >
+        <div class="flex items-center gap-2">
+          <Settings :size="14" />
+          <span class="text-xs">Preferences</span>
+        </div>
+        <ChevronRight :size="12" class="text-zinc-600" />
+      </button>
     </div>
   </aside>
 </template>
