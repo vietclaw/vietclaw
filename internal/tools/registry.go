@@ -43,7 +43,7 @@ func NewRegistry(cfg config.Config) *ToolRegistry {
 	r.tools[toolShellExec] = ShellExec{Policy: p}
 
 	r.tools["web_search"] = WebSearch{}
-	r.tools["web_fetch"] = WebFetch{}
+	r.tools["web_fetch"] = WebFetch{Policy: p}
 	r.tools["dir_list"] = DirList{Policy: p}
 	r.tools["file_grep"] = FileGrep{Policy: p}
 	r.tools["file_find"] = FileFind{Policy: p}

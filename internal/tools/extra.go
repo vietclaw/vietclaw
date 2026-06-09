@@ -46,7 +46,7 @@ func registerExtraTools(registry map[string]Tool, policy Policy) {
 	registry["url_parse"] = URLParse{}
 	registry["html_to_text"] = HTMLToText{}
 	registry["dns_lookup"] = DNSLookup{}
-	registry["http_request"] = HTTPRequest{}
+	registry["http_request"] = HTTPRequest{Policy: policy}
 	registry["timestamp_parse"] = TimestampParse{}
 	registry["timestamp_format"] = TimestampFormat{}
 	registry["file_stat"] = FileStat{Policy: policy}
@@ -362,7 +362,9 @@ func (t DNSLookup) Run(ctx context.Context, input string) (string, error) {
 	return marshalJSON(addrs)
 }
 
-type HTTPRequest struct{}
+type HTTPRequest struct {
+	Policy Policy
+}
 
 func (t HTTPRequest) Name() string { return "http_request" }
 func (t HTTPRequest) Run(ctx context.Context, input string) (string, error) {
@@ -376,6 +378,9 @@ func (t HTTPRequest) Run(ctx context.Context, input string) (string, error) {
 	}
 	if method != http.MethodGet && method != http.MethodHead {
 		return "", fmt.Errorf("method must be GET or HEAD")
+	}
+	if err := t.Policy.HTTPURLAllowed(args.URL); err != nil {
+		return "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, method, args.URL, nil)
 	if err != nil {

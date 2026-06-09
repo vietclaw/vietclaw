@@ -125,6 +125,21 @@ func (p Policy) ShellNetworkAllowed(command string) error {
 	return nil
 }
 
+func (p Policy) HTTPURLAllowed(rawURL string) error {
+	policy := p.cfg.Tools.Shell.NetworkPolicy
+	if !policy.Enabled {
+		return nil
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("blocked network target: invalid URL %s", rawURL)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("blocked network target: unsupported scheme %s", parsed.Scheme)
+	}
+	return p.hostAllowed(parsed.Hostname())
+}
+
 func (p Policy) hostAllowed(host string) error {
 	host = strings.Trim(strings.ToLower(host), ".")
 	if host == "" {

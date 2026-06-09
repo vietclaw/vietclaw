@@ -163,7 +163,9 @@ func cleanHTMLText(input string, reTag *regexp.Regexp) string {
 }
 
 // WebFetch fetches the clean text content from a web URL.
-type WebFetch struct{}
+type WebFetch struct {
+	Policy Policy
+}
 
 func (t WebFetch) Name() string { return "web_fetch" }
 
@@ -177,6 +179,9 @@ func (t WebFetch) Run(ctx context.Context, input string) (string, error) {
 
 	if args.URL == "" {
 		return "", fmt.Errorf("url is required")
+	}
+	if err := t.Policy.HTTPURLAllowed(args.URL); err != nil {
+		return "", err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", args.URL, nil)

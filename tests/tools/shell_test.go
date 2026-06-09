@@ -65,3 +65,17 @@ func TestShellExecBlocksNetworkPolicyBeforeRun(t *testing.T) {
 		t.Fatal("expected shell exec to reject localhost")
 	}
 }
+
+func TestHTTPToolsRespectNetworkPolicy(t *testing.T) {
+	cfg := config.Default(config.Paths{DataDir: t.TempDir()})
+	cfg.Tools.Shell.NetworkPolicy.Enabled = true
+	cfg.Tools.Shell.NetworkPolicy.DenyPrivate = true
+	registry := tools.NewRegistry(cfg)
+
+	if _, err := registry.Execute(context.Background(), "http_request", `{"url":"http://169.254.169.254/latest/meta-data"}`); err == nil {
+		t.Fatal("expected http_request to reject metadata IP")
+	}
+	if _, err := registry.Execute(context.Background(), "web_fetch", `{"url":"http://127.0.0.1"}`); err == nil {
+		t.Fatal("expected web_fetch to reject localhost")
+	}
+}

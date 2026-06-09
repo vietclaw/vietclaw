@@ -3,7 +3,9 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"html"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -224,6 +226,8 @@ func sendChunks(ctx context.Context, bot *tgbotapi.BotAPI, replyTo *tgbotapi.Mes
 		default:
 		}
 		msg := tgbotapi.NewMessage(replyTo.Chat.ID, chunk)
+		msg.ParseMode = "HTML"
+		msg.Text = telegramHTML(chunk)
 		if !replyTo.Chat.IsPrivate() {
 			msg.ReplyToMessageID = replyTo.MessageID
 		}
@@ -232,6 +236,20 @@ func sendChunks(ctx context.Context, bot *tgbotapi.BotAPI, replyTo *tgbotapi.Mes
 		}
 	}
 	return nil
+}
+
+var (
+	telegramCodeBlockPattern = regexp.MustCompile("(?s)```(?:[a-zA-Z0-9_+-]+)?\\n?(.*?)```")
+	telegramInlineCode       = regexp.MustCompile("`([^`]+)`")
+	telegramBoldPattern      = regexp.MustCompile(`\*\*([^*\n][^*]*?)\*\*`)
+)
+
+func telegramHTML(text string) string {
+	escaped := html.EscapeString(strings.TrimSpace(text))
+	escaped = telegramCodeBlockPattern.ReplaceAllString(escaped, "<pre>$1</pre>")
+	escaped = telegramInlineCode.ReplaceAllString(escaped, "<code>$1</code>")
+	escaped = telegramBoldPattern.ReplaceAllString(escaped, "<b>$1</b>")
+	return escaped
 }
 
 func chunks(text, fallback string, limit int) []string {

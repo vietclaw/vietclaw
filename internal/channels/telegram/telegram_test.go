@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"strings"
 	"testing"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -46,4 +47,20 @@ func TestTelegramMentionsBotFromCommand(t *testing.T) {
 	if !telegramMentionsBot(msg, 42, "@vietclawgo_bot", msg.Text) {
 		t.Fatal("expected bot command suffix to match bot username")
 	}
+}
+
+func TestTelegramHTMLFormatsMarkdownSubset(t *testing.T) {
+	got := telegramHTML("**CPU**\n`amd64`\n```go\nfmt.Println(\"x\")\n```")
+	if !containsAll(got, "<b>CPU</b>", "<code>amd64</code>", "<pre>fmt.Println(&#34;x&#34;)\n</pre>") {
+		t.Fatalf("unexpected telegram html: %s", got)
+	}
+}
+
+func containsAll(text string, values ...string) bool {
+	for _, value := range values {
+		if !strings.Contains(text, value) {
+			return false
+		}
+	}
+	return true
 }
