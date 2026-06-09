@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
@@ -133,15 +134,37 @@ func (a *Adapter) handleMessage(ctx context.Context, bot *tgbotapi.BotAPI, msg *
 }
 
 func telegramMentionsBot(msg *tgbotapi.Message, botID int64, botUsername string, text string) bool {
-	if strings.Contains(strings.ToLower(text), strings.ToLower(botUsername)) {
+	botUsername = strings.ToLower(strings.TrimSpace(botUsername))
+	if strings.Contains(strings.ToLower(text), botUsername) {
 		return true
 	}
 	for _, entity := range append(msg.Entities, msg.CaptionEntities...) {
 		if entity.Type == "text_mention" && entity.User != nil && entity.User.ID == botID {
 			return true
 		}
+		if entity.Type == "mention" || entity.Type == "bot_command" {
+			value := strings.ToLower(entityText(text, entity.Offset, entity.Length))
+			if value == botUsername || strings.HasSuffix(value, botUsername) {
+				return true
+			}
+		}
 	}
 	return false
+}
+
+func entityText(text string, offset int, length int) string {
+	if offset < 0 || length <= 0 {
+		return ""
+	}
+	encoded := utf16.Encode([]rune(text))
+	if offset >= len(encoded) {
+		return ""
+	}
+	end := offset + length
+	if end > len(encoded) {
+		end = len(encoded)
+	}
+	return string(utf16.Decode(encoded[offset:end]))
 }
 
 func startTyping(ctx context.Context, bot *tgbotapi.BotAPI, chatID int64) func() {
