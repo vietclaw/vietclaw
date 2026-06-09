@@ -4,9 +4,12 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
 	"vietclaw/internal/config"
 )
+
+const adapterRestartDelay = 10 * time.Second
 
 type Manager struct {
 	adapters []Adapter
@@ -26,18 +29,24 @@ func NewManager(cfg config.Config, logger *log.Logger, adapters []Adapter) *Mana
 func (m *Manager) Start(ctx context.Context) {
 	for _, adapter := range m.adapters {
 		adapter := adapter
-		m.setRunning(adapter.Name(), true, "")
 		go func() {
-			if m.logger != nil {
-				m.logger.Printf("channel adapter starting name=%s", adapter.Name())
-			}
-			err := adapter.Start(ctx)
-			if err != nil && ctx.Err() == nil {
+			for ctx.Err() == nil {
+				m.setRunning(adapter.Name(), true, "")
+				if m.logger != nil {
+					m.logger.Printf("channel adapter starting name=%s", adapter.Name())
+				}
+				err := adapter.Start(ctx)
+				if err == nil || ctx.Err() != nil {
+					break
+				}
 				m.setRunning(adapter.Name(), false, err.Error())
 				if m.logger != nil {
-					m.logger.Printf("channel adapter failed name=%s err=%v", adapter.Name(), err)
+					m.logger.Printf("channel adapter failed name=%s err=%v; retrying in %s", adapter.Name(), err, adapterRestartDelay)
 				}
-				return
+				select {
+				case <-ctx.Done():
+				case <-time.After(adapterRestartDelay):
+				}
 			}
 			m.setRunning(adapter.Name(), false, "")
 			if m.logger != nil {

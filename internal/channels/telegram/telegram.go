@@ -36,7 +36,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	}
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
-		return fmt.Errorf("create telegram bot: %w", err)
+		return fmt.Errorf("create telegram bot: %s", redactToken(err.Error(), token))
 	}
 	updateConfig := tgbotapi.NewUpdate(0)
 	if a.cfg.PollTimeoutSeconds > 0 {
@@ -54,6 +54,13 @@ func (a *Adapter) Start(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func redactToken(text string, token string) string {
+	if token == "" {
+		return text
+	}
+	return strings.ReplaceAll(text, token, "<redacted>")
 }
 
 func (a *Adapter) handleMessage(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
