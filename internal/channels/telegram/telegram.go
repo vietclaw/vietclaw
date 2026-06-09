@@ -34,6 +34,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	if token == "" {
 		return fmt.Errorf("telegram token env missing: %s", a.cfg.TokenEnv)
 	}
+	_ = tgbotapi.SetLogger(redactingTelegramLogger{token: token, handler: a.handler})
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return fmt.Errorf("create telegram bot: %s", redactToken(err.Error(), token))
@@ -61,6 +62,26 @@ func redactToken(text string, token string) string {
 		return text
 	}
 	return strings.ReplaceAll(text, token, "<redacted>")
+}
+
+type redactingTelegramLogger struct {
+	token   string
+	handler *channels.Handler
+}
+
+func (l redactingTelegramLogger) Println(v ...interface{}) {
+	l.write(fmt.Sprintln(v...))
+}
+
+func (l redactingTelegramLogger) Printf(format string, v ...interface{}) {
+	l.write(fmt.Sprintf(format, v...))
+}
+
+func (l redactingTelegramLogger) write(text string) {
+	if l.handler == nil || l.handler.Log == nil {
+		return
+	}
+	l.handler.Log.Print(strings.TrimSpace(redactToken(text, l.token)))
 }
 
 func (a *Adapter) handleMessage(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
