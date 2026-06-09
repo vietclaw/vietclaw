@@ -42,6 +42,7 @@ const (
 	DefaultDockerImage   = "alpine:3.20"
 	DefaultDockerNetwork = "none"
 	DefaultWorkspaceMode = "ro"
+	DefaultShellTimeout  = 30
 
 	DefaultDailyUSDLimit           = 0.25
 	DefaultRequireApprovalAboveUSD = 0.05
@@ -114,12 +115,23 @@ func Default(paths Paths) Config {
 		},
 		Tools: ToolsConfig{
 			Shell: ShellToolConfig{
-				Enabled:       false,
-				Sandbox:       DefaultShellSandbox,
-				DockerBinary:  DefaultDockerBinary,
-				DockerImage:   DefaultDockerImage,
-				DockerNetwork: DefaultDockerNetwork,
-				WorkspaceMode: DefaultWorkspaceMode,
+				Enabled:        false,
+				Sandbox:        DefaultShellSandbox,
+				DockerBinary:   DefaultDockerBinary,
+				DockerImage:    DefaultDockerImage,
+				DockerNetwork:  DefaultDockerNetwork,
+				WorkspaceMode:  DefaultWorkspaceMode,
+				TimeoutSeconds: DefaultShellTimeout,
+				NetworkPolicy: ShellNetworkPolicyConfig{
+					Enabled:     true,
+					DenyPrivate: true,
+					DenyHosts: []string{
+						"localhost",
+						"metadata.google.internal",
+						"169.254.169.254",
+						"100.100.100.200",
+					},
+				},
 			},
 			Files: FileToolConfig{
 				Enabled:       true,

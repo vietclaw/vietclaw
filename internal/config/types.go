@@ -130,13 +130,21 @@ type MCPServerConfig struct {
 }
 
 type ShellToolConfig struct {
-	Enabled        bool   `json:"enabled"`
-	Sandbox        string `json:"sandbox,omitempty"`
-	DockerBinary   string `json:"docker_binary,omitempty"`
-	DockerImage    string `json:"docker_image,omitempty"`
-	DockerNetwork  string `json:"docker_network,omitempty"`
-	WorkspaceMode  string `json:"workspace_mode,omitempty"`
-	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
+	Enabled        bool                     `json:"enabled"`
+	Sandbox        string                   `json:"sandbox,omitempty"`
+	DockerBinary   string                   `json:"docker_binary,omitempty"`
+	DockerImage    string                   `json:"docker_image,omitempty"`
+	DockerNetwork  string                   `json:"docker_network,omitempty"`
+	WorkspaceMode  string                   `json:"workspace_mode,omitempty"`
+	TimeoutSeconds int                      `json:"timeout_seconds,omitempty"`
+	NetworkPolicy  ShellNetworkPolicyConfig `json:"network_policy,omitempty"`
+}
+
+type ShellNetworkPolicyConfig struct {
+	Enabled     bool     `json:"enabled"`
+	AllowHosts  []string `json:"allow_hosts,omitempty"`
+	DenyHosts   []string `json:"deny_hosts,omitempty"`
+	DenyPrivate bool     `json:"deny_private"`
 }
 
 type FileToolConfig struct {

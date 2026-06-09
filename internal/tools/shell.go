@@ -3,8 +3,11 @@ package tools
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -25,6 +28,9 @@ func (t ShellExec) Run(ctx context.Context, input string) (string, error) {
 	fields := strings.Fields(input)
 	if len(fields) == 0 {
 		return "", fmt.Errorf("empty command")
+	}
+	if err := t.Policy.ShellNetworkAllowed(input); err != nil {
+		return "", err
 	}
 	if t.Policy.cfg.Tools.Shell.Sandbox == "docker" {
 		return t.runDocker(ctx, fields)
@@ -87,4 +93,89 @@ func defaultString(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+var shellURLPattern = regexp.MustCompile(`(?i)\bhttps?://[^\s"'<>]+`)
+
+func (p Policy) ShellNetworkAllowed(command string) error {
+	policy := p.cfg.Tools.Shell.NetworkPolicy
+	if !policy.Enabled {
+		return nil
+	}
+	for _, rawURL := range shellURLPattern.FindAllString(command, -1) {
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			return fmt.Errorf("blocked shell network target: invalid URL %s", rawURL)
+		}
+		if err := p.hostAllowed(parsed.Hostname()); err != nil {
+			return err
+		}
+	}
+	for _, field := range strings.Fields(command) {
+		candidate := strings.Trim(field, `"'[](),;`)
+		if strings.Contains(candidate, "/") || strings.Contains(candidate, "\\") || strings.Contains(candidate, "$") {
+			continue
+		}
+		if ip := net.ParseIP(candidate); ip != nil {
+			if err := p.ipAllowed(candidate, ip); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (p Policy) hostAllowed(host string) error {
+	host = strings.Trim(strings.ToLower(host), ".")
+	if host == "" {
+		return nil
+	}
+	policy := p.cfg.Tools.Shell.NetworkPolicy
+	for _, pattern := range policy.AllowHosts {
+		if hostMatches(host, pattern) {
+			return nil
+		}
+	}
+	for _, pattern := range policy.DenyHosts {
+		if hostMatches(host, pattern) {
+			return fmt.Errorf("blocked shell network host: %s", host)
+		}
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return p.ipAllowed(host, ip)
+	}
+	if policy.DenyPrivate {
+		addrs, err := net.LookupIP(host)
+		if err == nil {
+			for _, ip := range addrs {
+				if privateIP(ip) {
+					return fmt.Errorf("blocked shell network host: %s resolves to private IP", host)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (p Policy) ipAllowed(label string, ip net.IP) error {
+	if p.cfg.Tools.Shell.NetworkPolicy.DenyPrivate && privateIP(ip) {
+		return fmt.Errorf("blocked shell network IP: %s", label)
+	}
+	return nil
+}
+
+func hostMatches(host string, pattern string) bool {
+	pattern = strings.Trim(strings.ToLower(pattern), ".")
+	if pattern == "" {
+		return false
+	}
+	if strings.HasPrefix(pattern, "*.") {
+		suffix := strings.TrimPrefix(pattern, "*")
+		return strings.HasSuffix(host, suffix)
+	}
+	return host == pattern
+}
+
+func privateIP(ip net.IP) bool {
+	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
 }

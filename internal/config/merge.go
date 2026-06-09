@@ -185,5 +185,22 @@ func mergeShell(cfg ShellToolConfig, def ShellToolConfig) ShellToolConfig {
 	if cfg.TimeoutSeconds == 0 {
 		cfg.TimeoutSeconds = def.TimeoutSeconds
 	}
+	cfg.NetworkPolicy = mergeShellNetworkPolicy(cfg.NetworkPolicy, def.NetworkPolicy)
+	return cfg
+}
+
+func mergeShellNetworkPolicy(cfg ShellNetworkPolicyConfig, def ShellNetworkPolicyConfig) ShellNetworkPolicyConfig {
+	if !cfg.Enabled {
+		cfg.Enabled = def.Enabled
+	}
+	if cfg.AllowHosts == nil {
+		cfg.AllowHosts = def.AllowHosts
+	}
+	if cfg.DenyHosts == nil {
+		cfg.DenyHosts = def.DenyHosts
+	}
+	if !cfg.DenyPrivate {
+		cfg.DenyPrivate = def.DenyPrivate
+	}
 	return cfg
 }
