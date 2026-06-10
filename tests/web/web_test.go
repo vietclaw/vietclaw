@@ -106,6 +106,37 @@ func TestAPIChatStreamErrorIsJSONEvent(t *testing.T) {
 	}
 }
 
+func TestHarnessRunsAPI(t *testing.T) {
+	application := testApp(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/harness/runs", bytes.NewBufferString(`{"goal":"fix failing auth test"}`))
+	web.NewRouter(application).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ID == "" || created.Status == "" {
+		t.Fatalf("unexpected create payload: %#v", created)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/harness/runs/"+created.ID, nil)
+	web.NewRouter(application).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("detail status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "capsule.created") {
+		t.Fatalf("expected evidence event in detail: %s", rec.Body.String())
+	}
+}
+
 func TestSettingsValidationRejectsInvalidConfig(t *testing.T) {
 	application := testApp(t)
 	cfg := application.Config

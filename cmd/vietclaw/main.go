@@ -22,6 +22,7 @@ const (
 	cmdChat     = "chat"
 	cmdMemory   = "memory"
 	cmdTools    = "tools"
+	cmdHarness  = "harness"
 	cmdChannels = "channels"
 	cmdDiscord  = "discord"
 	cmdTelegram = "telegram"
@@ -67,6 +68,8 @@ func run(args []string) error {
 		return runMemory(args[2:])
 	case cmdTools:
 		return runTools(args[2:])
+	case cmdHarness:
+		return runHarness(args[2:])
 	case cmdChannels:
 		return runChannels()
 	case cmdDiscord:

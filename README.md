@@ -27,6 +27,8 @@ go run ./cmd/vietclaw doctor
 go run ./cmd/vietclaw chat "mày là gì"
 go run ./cmd/vietclaw memory add "Minh thích tiết kiệm token"
 go run ./cmd/vietclaw memory search "token"
+go run ./cmd/vietclaw harness create "fix failing login test"
+go run ./cmd/vietclaw harness list
 go run ./cmd/vietclaw channels
 ```
 
@@ -148,3 +150,4 @@ The final binary serves the embedded UI and does not need Node, pnpm, or npm at 
 - Real provider presets and approval flow
 - Better session summaries and memory curation
 - Web UI settings for providers, channels, and memory curation
+- VietClaw Harness runner UI for plan capsules, evidence ledger, verifier loops, and worktree follow-through
