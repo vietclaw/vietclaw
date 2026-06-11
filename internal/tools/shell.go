@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -36,11 +37,13 @@ func (t ShellExec) Run(ctx context.Context, input string) (string, error) {
 		return t.runDocker(ctx, fields)
 	}
 	if runtime.GOOS == "windows" {
-		out, err := exec.CommandContext(ctx, "cmd", "/C", input).CombinedOutput()
-		return string(out), err
+		cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", input)
+		cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUTF8=1")
+		out, err := cmd.CombinedOutput()
+		return CombinedOutputResult(out, err)
 	}
 	out, err := exec.CommandContext(ctx, fields[0], fields[1:]...).CombinedOutput()
-	return string(out), err
+	return CombinedOutputResult(out, err)
 }
 
 func (t ShellExec) runDocker(ctx context.Context, command []string) (string, error) {
@@ -59,12 +62,12 @@ func (t ShellExec) runDocker(ctx context.Context, command []string) (string, err
 	args := BuildDockerShellArgs(t.Policy.cfg, command)
 	out, err := exec.CommandContext(runCtx, defaultString(cfg.DockerBinary, config.DefaultDockerBinary), args...).CombinedOutput()
 	if runCtx.Err() == context.DeadlineExceeded {
-		return string(out), fmt.Errorf("shell.exec docker timeout")
+		return CombinedOutputResult(out, fmt.Errorf("shell.exec docker timeout"))
 	}
 	if !strings.Contains(strings.Join(args, " "), workspace) {
-		return string(out), fmt.Errorf("shell.exec docker workspace mount missing")
+		return CombinedOutputResult(out, fmt.Errorf("shell.exec docker workspace mount missing"))
 	}
-	return string(out), err
+	return CombinedOutputResult(out, err)
 }
 
 func BuildDockerShellArgs(cfg config.Config, command []string) []string {

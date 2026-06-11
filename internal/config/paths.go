@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 func DefaultPaths() (Paths, error) {
@@ -27,7 +28,7 @@ func ExpandPath(path string) string {
 			return home
 		}
 	}
-	if len(path) >= 2 && path[:2] == "~"+string(os.PathSeparator) {
+	if len(path) >= 2 && path[0] == '~' && (path[1] == '/' || path[1] == '\\') {
 		home, err := os.UserHomeDir()
 		if err == nil {
 			return filepath.Join(home, path[2:])
@@ -37,15 +38,24 @@ func ExpandPath(path string) string {
 }
 
 func defaultDataDir() (string, error) {
-	if runtime.GOOS == "windows" {
-		configDir, err := os.UserConfigDir()
-		if err == nil && configDir != "" {
-			return filepath.Join(configDir, AppName), nil
-		}
+	if env := strings.TrimSpace(os.Getenv("VIETCLAW_DATA_DIR")); env != "" {
+		return ExpandPath(env), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
 	return filepath.Join(home, ".vietclaw"), nil
+}
+
+// LegacyWindowsDataDir is the pre-unification Windows default (%APPDATA%\VietClaw).
+func LegacyWindowsDataDir() (string, bool) {
+	if runtime.GOOS != "windows" {
+		return "", false
+	}
+	configDir, err := os.UserConfigDir()
+	if err != nil || configDir == "" {
+		return "", false
+	}
+	return filepath.Join(configDir, AppName), true
 }

@@ -40,9 +40,11 @@
   "tool.ui.uuid_generate": "Đã tạo UUID",
   "tool.ui.web_fetch": "Đã truy cập",
   "tool.ui.web_search": "Đã tìm kiếm",
+  "tool.ui.no_output": "Không có stdout/stderr",
   "tool.call_detail": "Lệnh gọi",
   "tool.result_detail": "Kết quả",
   "chat.thinking": "Đang suy nghĩ…",
+  "chat.stop": "Dừng ngay",
   "chat.copy": "Copy",
   "chat.copied": "Đã copy"
 }

@@ -24,7 +24,7 @@ const channelColors: Record<string, string> = {
       <NuxtLink
         v-for="session in sessions"
         :key="session.id"
-        :to="`/sessions/${session.id}`"
+        :to="`/p/${session.id}`"
         class="relative z-10 flex items-center gap-4 border-b border-[var(--border-0)] px-5 py-4 last:border-b-0 vc-transition-fast hover:bg-[var(--bg-2)]/40 vc-focus"
       >
         <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-[10px] font-bold uppercase" :class="channelColors[session.channel] || 'bg-[var(--bg-3)] text-[var(--fg-2)] border-[var(--border-0)]'">

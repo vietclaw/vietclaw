@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Menu } from '@lucide/vue'
+
 const route = useRoute()
 const mobileOpen = useState('sidebarMobileOpen', () => false)
 const isSettings = computed(() => route.path.startsWith('/settings'))
@@ -9,12 +11,12 @@ watch(() => route.path, () => {
 </script>
 
 <template>
-  <div class="flex h-[100dvh] w-screen overflow-hidden bg-vc-bg">
+  <div class="vc-app-frame flex w-full max-w-full overflow-hidden bg-vc-bg">
     <Teleport to="body">
       <Transition name="fade">
         <div
           v-if="mobileOpen"
-          class="fixed inset-0 z-40 bg-vc-text/15 lg:hidden"
+          class="fixed inset-0 z-40 bg-vc-text/15 md:hidden"
           @click="mobileOpen = false"
         />
       </Transition>
@@ -22,14 +24,32 @@ watch(() => route.path, () => {
 
     <AppSidebar :open="mobileOpen" @close="mobileOpen = false" />
 
-    <main class="flex h-full min-w-0 flex-1 flex-col">
-      <TopBar v-if="!isSettings" @toggle-mobile="mobileOpen = !mobileOpen" />
-      <div class="flex-1 overflow-hidden">
+    <main class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <TopBar
+        v-if="!isSettings"
+        @toggle-mobile="mobileOpen = !mobileOpen"
+      />
+      <div
+        v-else
+        class="flex h-12 shrink-0 items-center border-b border-vc-border-subtle px-4 md:hidden"
+      >
+        <button
+          type="button"
+          class="vc-btn-ghost rounded-md p-1.5"
+          @click="mobileOpen = true"
+        >
+          <Menu :size="18" :stroke-width="1.75" />
+        </button>
+        <span class="ml-2 text-sm font-medium text-vc-text">Cài đặt</span>
+      </div>
+      <div class="min-h-0 flex-1 overflow-hidden">
         <slot />
       </div>
     </main>
 
-    <ToastContainer />
+    <Teleport to="body">
+      <ToastContainer />
+    </Teleport>
   </div>
 </template>
 

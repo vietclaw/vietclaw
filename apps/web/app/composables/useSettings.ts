@@ -19,9 +19,12 @@ export function useSettings() {
 
   async function load() {
     loading.value = true
+    const toast = useToast()
     try {
       const cfg = await apiFetch<VietClawConfig>('/api/settings')
       applyLoaded(cfg)
+    } catch (err) {
+      toast.add(err instanceof Error ? err.message : 'Không tải được cấu hình', 'error')
     } finally {
       loading.value = false
     }

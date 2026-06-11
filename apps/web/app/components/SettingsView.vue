@@ -19,7 +19,7 @@ const selectClass = `${inputClass} cursor-pointer`
     </div>
 
     <template v-if="config">
-      <SettingsSection title="Agent" description="Hành vi và giới hạn của agent" :default-open="true">
+      <SettingsSection title="Agent" description="Hành vi và giới hạn của agent">
         <div class="grid gap-4 sm:grid-cols-2">
           <SettingsField label="Tên">
             <input v-model="config.agent.name" type="text" :class="inputClass" />

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-navigateTo('/', { replace: true })
+const route = useRoute()
+await navigateTo(`/p/${route.params.id}`, { replace: true })
 </script>
 
 <template>

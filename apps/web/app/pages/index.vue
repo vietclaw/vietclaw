@@ -1,7 +1,10 @@
 <script setup lang="ts">
-definePageMeta({ title: 'Workspace' })
+const { sessions, currentSessionId, createSession } = useChat()
+
+const targetId = currentSessionId.value || sessions.value[0]?.id || createSession().id
+await navigateTo(`/p/${targetId}`, { replace: true })
 </script>
 
 <template>
-  <PromptWorkspace />
+  <div />
 </template>

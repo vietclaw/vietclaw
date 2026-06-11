@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"vietclaw/internal/config"
 	"vietclaw/internal/db"
@@ -24,6 +25,7 @@ func runDoctor() error {
 			}
 			fmt.Printf("[warn] data dir missing: %s\n", paths.DataDir)
 			fmt.Printf("[warn] config missing: %s\n", paths.ConfigFile)
+			hintLegacyDataDir(paths.DataDir)
 			fmt.Println("[warn] daemon not running")
 			return nil
 		}
@@ -126,4 +128,16 @@ func checkDaemon(cfg config.Config) {
 	} else {
 		fmt.Println("[ok] daemon running")
 	}
+}
+
+func hintLegacyDataDir(current string) {
+	legacy, ok := config.LegacyWindowsDataDir()
+	if !ok || legacy == current {
+		return
+	}
+	legacyConfig := filepath.Join(legacy, config.ConfigFileName)
+	if _, err := os.Stat(legacyConfig); err != nil {
+		return
+	}
+	fmt.Printf("[hint] legacy data dir found: %s — copy contents to %s\n", legacy, current)
 }

@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowUp,
   ChevronDown,
+  Square,
   Copy,
   FileText,
   FolderOpen,
@@ -14,8 +15,8 @@ import {
 } from '@lucide/vue'
 import katex from 'katex'
 import { marked } from 'marked'
-import hljs from 'highlight.js'
-import type { ChatStepEvent } from '~/composables/useChat'
+import type { ChatItem, ChatStepEvent } from '~/composables/useChat'
+import { enhanceCodeBlocks } from '~/utils/enhanceCodeBlocks'
 
 const { currentSession, currentSessionId, isGenerating, sendMessage, clearSessionMessages } = useChat()
 const { t, toolLabel } = useI18n()
@@ -71,6 +72,10 @@ function toolRequestSummary(input?: string): string {
   }
 }
 
+type RenderBlock =
+  | { type: 'text', text: string }
+  | { type: 'tool', group: ToolGroup }
+
 function buildToolGroups(steps: ChatStepEvent[]): ToolGroup[] {
   const groups: ToolGroup[] = []
   for (const step of steps) {
@@ -96,6 +101,81 @@ function buildToolGroups(steps: ChatStepEvent[]): ToolGroup[] {
     }
   }
   return groups
+}
+
+function splitLegacyTextAroundTools(text: string, toolCount: number): [string, string] | null {
+  if (!text.trim() || toolCount === 0) return null
+  const trimmed = text.trim()
+
+  const patterns = [
+    /\n\n+(?=(Xong|Done|OK|Đã |Hoàn |Finished|Successfully))/i,
+    /(?<=[.!?…])\s+(?=(Xong|Done|OK|Đã |Hoàn |Finished))/i,
+    /(?<=[😎✅👍])\s+(?=(Xong|Done|OK|Đã |Hoàn |Finished))/i,
+  ]
+  for (const pattern of patterns) {
+    const match = pattern.exec(trimmed)
+    if (match && match.index > 0) {
+      const before = trimmed.slice(0, match.index).trim()
+      const after = trimmed.slice(match.index).trim()
+      if (before && after) return [before, after]
+    }
+  }
+  return null
+}
+
+function buildRenderBlocks(msg: ChatItem): RenderBlock[] {
+  const hasTextSteps = msg.steps.some(step => step.type === 'text')
+  const toolGroups = buildToolGroups(msg.steps)
+
+  if (!hasTextSteps) {
+    const split = splitLegacyTextAroundTools(msg.text, toolGroups.length)
+    if (split) {
+      return [
+        { type: 'text', text: split[0] },
+        ...toolGroups.map(group => ({ type: 'tool' as const, group })),
+        { type: 'text', text: split[1] },
+      ]
+    }
+    const blocks: RenderBlock[] = []
+    if (msg.text.trim()) blocks.push({ type: 'text', text: msg.text })
+    for (const group of toolGroups) blocks.push({ type: 'tool', group })
+    return blocks
+  }
+
+  const blocks: RenderBlock[] = []
+  for (let i = 0; i < msg.steps.length; i++) {
+    const step = msg.steps[i]
+    if (step.type === 'text' && step.text) {
+      blocks.push({ type: 'text', text: step.text })
+    } else if (step.type === 'tool_call') {
+      const group: ToolGroup = {
+        id: `c-${i}`,
+        toolName: step.toolName ?? 'tool',
+        input: step.toolInput,
+      }
+      const next = msg.steps[i + 1]
+      if (next?.type === 'tool_result' && next.toolName === step.toolName) {
+        group.result = next.toolResult
+        i++
+      }
+      blocks.push({ type: 'tool', group })
+    } else if (step.type === 'tool_result') {
+      blocks.push({
+        type: 'tool',
+        group: {
+          id: `r-${i}`,
+          toolName: step.toolName ?? 'tool',
+          result: step.toolResult,
+        },
+      })
+    } else if (step.type === 'error') {
+      blocks.push({
+        type: 'tool',
+        group: { id: `e-${i}`, toolName: 'error', error: step.error },
+      })
+    }
+  }
+  return blocks
 }
 
 function toolIcon(name: string) {
@@ -150,18 +230,6 @@ function renderMarkdown(text: string): string {
   }
 }
 
-function formatToolBody(raw?: string, max = 8000): string {
-  if (!raw) return ''
-  const trimmed = raw.trim()
-  if (!trimmed) return ''
-  try {
-    const pretty = JSON.stringify(JSON.parse(trimmed), null, 2)
-    return pretty.length > max ? `${pretty.slice(0, max)}…` : pretty
-  } catch {
-    return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed
-  }
-}
-
 function autoResize(el: HTMLTextAreaElement) {
   el.style.height = 'auto'
   el.style.height = Math.min(el.scrollHeight, 192) + 'px'
@@ -208,10 +276,11 @@ function scrollToBottom(force = false) {
   el.scrollTop = el.scrollHeight
 }
 
-function highlightCode(el: Element) {
-  el.querySelectorAll('pre code').forEach((block) => {
-    hljs.highlightElement(block as HTMLElement)
-  })
+function enhanceMarkdownCode(el: Element) {
+  enhanceCodeBlocks(el, async (text) => {
+    await window.navigator.clipboard.writeText(text)
+    toast.add(t('chat.copied'), 'success')
+  }, t('chat.copy'))
 }
 
 async function copyMessage(text: string) {
@@ -228,8 +297,14 @@ function isStreamingMessage(idx: number) {
     && messages.value[idx]?.role === 'assistant'
 }
 
+function messageBlocks(msg: ChatItem): RenderBlock[] {
+  return buildRenderBlocks(msg)
+}
+
 watch(
-  () => messages.value.map(msg => `${msg.role}:${msg.text.length}:${msg.steps.length}`).join('|'),
+  () => messages.value.map(msg =>
+    `${msg.role}:${msg.text.length}:${msg.steps.map(s => `${s.type}:${s.text?.length ?? 0}`).join(',')}`
+  ).join('|'),
   async () => {
     await nextTick()
     scrollToBottom()
@@ -243,8 +318,8 @@ watch(currentSessionId, () => {
 </script>
 
 <template>
-  <div class="flex h-full flex-1 flex-col">
-    <div ref="chatBox" class="flex-1 overflow-y-auto vc-scrollbar" @scroll="onChatScroll">
+  <div class="flex h-full min-h-0 flex-col">
+    <div ref="chatBox" class="min-h-0 flex-1 overflow-y-auto vc-scrollbar" @scroll="onChatScroll">
       <div
         v-if="messages.length === 0"
         class="mx-auto max-w-2xl px-4 pt-12 pb-8 md:px-8 md:pt-16"
@@ -279,25 +354,36 @@ watch(currentSessionId, () => {
 
           <div v-else class="space-y-3">
             <p
-              v-if="isStreamingMessage(idx) && !msg.text && msg.steps.length === 0"
+              v-if="isStreamingMessage(idx) && messageBlocks(msg).length === 0"
               class="text-sm text-vc-text-muted"
             >
               {{ t('chat.thinking') }}
             </p>
 
-            <div v-if="buildToolGroups(msg.steps).length > 0" class="space-y-1.5">
-              <div
-                v-for="group in buildToolGroups(msg.steps)"
-                :key="group.id"
-                class="text-sm leading-relaxed"
-              >
-                <div v-if="group.error" class="flex items-center gap-2 text-vc-error">
+            <template v-for="(block, bi) in messageBlocks(msg)" :key="`${idx}-${bi}`">
+              <div v-if="block.type === 'text'" class="relative">
+                <div
+                  v-if="isStreamingMessage(idx) && bi === messageBlocks(msg).length - 1"
+                  class="text-[15px] leading-relaxed whitespace-pre-wrap text-vc-text"
+                >
+                  {{ block.text }}<span class="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-vc-accent align-middle" />
+                </div>
+                <div
+                  v-else
+                  class="prose max-w-none"
+                  v-html="renderMarkdown(block.text)"
+                  v-html-hook="enhanceMarkdownCode"
+                />
+              </div>
+
+              <div v-else class="text-sm leading-relaxed">
+                <div v-if="block.group.error" class="flex items-center gap-2 text-vc-error">
                   <AlertCircle :size="14" class="shrink-0" :stroke-width="1.75" />
-                  <span>{{ group.error }}</span>
+                  <span>{{ block.group.error }}</span>
                 </div>
                 <div v-else class="flex items-start gap-2 text-vc-text-muted">
                   <component
-                    :is="toolIcon(group.toolName)"
+                    :is="toolIcon(block.group.toolName)"
                     :size="14"
                     class="mt-0.5 shrink-0"
                     :stroke-width="1.75"
@@ -306,61 +392,54 @@ watch(currentSessionId, () => {
                     <button
                       type="button"
                       class="group flex max-w-full items-center gap-1.5 text-left transition-colors hover:text-vc-text-secondary"
-                      @click="toggleToolExpand(idx, group.id)"
+                      @click="toggleToolExpand(idx, block.group.id)"
                     >
                       <span class="shrink-0 font-medium text-vc-text-secondary group-hover:text-vc-text">
-                        {{ toolLabel(group.toolName) }}
+                        {{ toolLabel(block.group.toolName) }}
                       </span>
-                      <template v-if="toolRequestSummary(group.input)">
-                        <span class="truncate text-vc-text-muted">- {{ toolRequestSummary(group.input) }}</span>
+                      <template v-if="toolRequestSummary(block.group.input)">
+                        <span class="truncate text-vc-text-muted">- {{ toolRequestSummary(block.group.input) }}</span>
                       </template>
                       <ChevronDown
                         :size="14"
                         class="shrink-0 transition-transform"
-                        :class="{ 'rotate-180': isToolExpanded(idx, group.id) }"
+                        :class="{ 'rotate-180': isToolExpanded(idx, block.group.id) }"
                         :stroke-width="1.75"
                       />
                     </button>
                     <div
-                      v-if="isToolExpanded(idx, group.id)"
-                      class="mt-2 space-y-2 border-l-2 border-vc-border-subtle pl-3"
+                      v-if="isToolExpanded(idx, block.group.id)"
+                      class="mt-2 space-y-3 border-l-2 border-vc-border-subtle pl-3"
                     >
-                      <div v-if="group.input">
-                        <p class="mb-1 text-[11px] font-medium text-vc-text-muted">{{ t('tool.call_detail') }}</p>
-                        <pre class="max-h-52 overflow-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-vc-text-secondary">{{ formatToolBody(group.input) }}</pre>
-                      </div>
-                      <div v-if="group.result">
-                        <p class="mb-1 text-[11px] font-medium text-vc-text-muted">{{ t('tool.result_detail') }}</p>
-                        <pre class="max-h-64 overflow-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-vc-text-secondary">{{ formatToolBody(group.result) }}</pre>
-                      </div>
+                      <ToolDetailBody
+                        v-if="block.group.input"
+                        :tool-name="block.group.toolName"
+                        :raw="block.group.input"
+                        side="input"
+                        :label="t('tool.call_detail')"
+                      />
+                      <ToolDetailBody
+                        v-if="block.group.result"
+                        :tool-name="block.group.toolName"
+                        :raw="block.group.result"
+                        :input-raw="block.group.input"
+                        side="result"
+                        :label="t('tool.result_detail')"
+                      />
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            </template>
 
-            <div v-if="msg.text" class="relative">
-              <div
-                v-if="isStreamingMessage(idx)"
-                class="text-[15px] leading-relaxed whitespace-pre-wrap text-vc-text"
-              >
-                {{ msg.text }}<span class="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-vc-accent align-middle" />
-              </div>
-              <div
-                v-else
-                class="prose max-w-none"
-                v-html="renderMarkdown(msg.text)"
-                v-html-hook="highlightCode"
-              />
-              <button
-                v-if="!isStreamingMessage(idx)"
-                type="button"
-                class="mt-2 flex items-center gap-1.5 text-xs text-vc-text-muted transition-colors hover:text-vc-text-secondary"
-                @click="copyMessage(msg.text)"
-              >
-                <Copy :size="12" :stroke-width="1.75" /> {{ t('chat.copy') }}
-              </button>
-            </div>
+            <button
+              v-if="msg.text && !isStreamingMessage(idx)"
+              type="button"
+              class="flex items-center gap-1.5 text-xs text-vc-text-muted transition-colors hover:text-vc-text-secondary"
+              @click="copyMessage(msg.text)"
+            >
+              <Copy :size="12" :stroke-width="1.75" /> {{ t('chat.copy') }}
+            </button>
           </div>
         </template>
       </div>
@@ -389,9 +468,19 @@ watch(currentSessionId, () => {
               <RefreshCw :size="15" :stroke-width="1.75" />
             </button>
             <button
+              v-if="isGenerating"
+              type="button"
+              class="vc-composer-stop"
+              :title="t('chat.stop')"
+              @click="stopGeneration()"
+            >
+              <Square :size="14" :stroke-width="0" fill="currentColor" />
+            </button>
+            <button
+              v-else
               type="button"
               class="vc-composer-send"
-              :disabled="isGenerating || !chatInput.trim()"
+              :disabled="!chatInput.trim()"
               @click="handleSend"
             >
               <ArrowUp :size="16" :stroke-width="2.25" />

@@ -40,9 +40,11 @@
   "tool.ui.uuid_generate": "Generated UUID",
   "tool.ui.web_fetch": "Fetched page",
   "tool.ui.web_search": "Searched web",
+  "tool.ui.no_output": "No stdout/stderr captured",
   "tool.call_detail": "Call",
   "tool.result_detail": "Result",
   "chat.thinking": "Thinking…",
+  "chat.stop": "Stop",
   "chat.copy": "Copy",
   "chat.copied": "Copied"
 }

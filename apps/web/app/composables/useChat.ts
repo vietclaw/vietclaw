@@ -2,7 +2,7 @@ import type { ChatResponse } from '~/types'
 import { apiFetch } from '~/utils/api'
 
 export type ChatStepEvent = {
-  type: 'tool_call' | 'tool_result' | 'error' | 'done'
+  type: 'text' | 'tool_call' | 'tool_result' | 'error' | 'done'
   text?: string
   toolName?: string
   toolInput?: string
@@ -34,9 +34,15 @@ export type ChatSession = {
 const STORAGE_KEY = 'vietclaw_chats'
 const CONFIG_KEY = 'vietclaw_config'
 
+export function sessionPath(id: string) {
+  return `/p/${encodeURIComponent(id)}`
+}
+
 const sessions = ref<ChatSession[]>([])
 const currentSessionId = ref('')
 const isGenerating = ref(false)
+let streamAbort: AbortController | null = null
+let streamReader: ReadableStreamDefaultReader<Uint8Array> | null = null
 
 function createBackendSessionID() {
   const suffix = Math.random().toString(36).slice(2, 10)
@@ -114,11 +120,21 @@ function switchSession(id: string) {
 }
 
 function deleteSession(id: string) {
+  const wasCurrent = currentSessionId.value === id
   sessions.value = sessions.value.filter(s => s.id !== id)
-  if (currentSessionId.value === id && sessions.value.length > 0) {
-    currentSessionId.value = sessions.value[0]?.id ?? ''
+  if (wasCurrent) {
+    if (sessions.value.length > 0) {
+      currentSessionId.value = sessions.value[0].id
+      if (import.meta.client) {
+        void navigateTo(sessionPath(currentSessionId.value), { replace: true })
+      }
+    } else {
+      const created = createSession()
+      if (import.meta.client) {
+        void navigateTo(sessionPath(created.id), { replace: true })
+      }
+    }
   }
-  if (sessions.value.length === 0) createSession()
   saveSessions()
 }
 
@@ -180,6 +196,9 @@ function applySSEEvent(event: SSEEvent, session: ChatSession, msgIndex: number):
       session.id = nextSessionID
       session.sessionId = nextSessionID
       currentSessionId.value = nextSessionID
+      if (import.meta.client) {
+        void navigateTo(sessionPath(nextSessionID), { replace: true })
+      }
     }
   } else if (event.event === 'tool_call') {
     assistantMsg.steps.push({
@@ -193,8 +212,14 @@ function applySSEEvent(event: SSEEvent, session: ChatSession, msgIndex: number):
       toolName: parsed.name,
       toolResult: parsed.result
     })
-  } else if (parsed.text) {
+  } else if (event.event === 'text' || parsed.text) {
     assistantMsg.text += parsed.text
+    const last = assistantMsg.steps[assistantMsg.steps.length - 1]
+    if (last?.type === 'text') {
+      last.text = (last.text || '') + parsed.text
+    } else {
+      assistantMsg.steps.push({ type: 'text', text: parsed.text })
+    }
   }
   return false
 }
@@ -209,6 +234,15 @@ function yieldToUI() {
   })
 }
 
+function stopGeneration() {
+  if (streamAbort) {
+    streamAbort.abort()
+  }
+  if (streamReader) {
+    void streamReader.cancel()
+  }
+}
+
 async function sendMessage(text: string) {
   const s = currentSession()
   if (!s || isGenerating.value) return
@@ -220,6 +254,7 @@ async function sendMessage(text: string) {
   saveSessions()
 
   isGenerating.value = true
+  streamAbort = new AbortController()
 
   const msgIndex = s.messages.length
   s.messages.push({ role: 'assistant', text: '', steps: [] })
@@ -228,6 +263,7 @@ async function sendMessage(text: string) {
     const res = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: streamAbort.signal,
       body: JSON.stringify({
         session_id: s.sessionId,
         user_id: 'local',
@@ -243,6 +279,7 @@ async function sendMessage(text: string) {
 
     const reader = res.body?.getReader()
     if (!reader) throw new Error('No response body')
+    streamReader = reader
 
     const decoder = new TextDecoder()
     let buffer = ''
@@ -278,13 +315,19 @@ async function sendMessage(text: string) {
     }
 
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Connection failed.'
     const assistant = s.messages[msgIndex]
-    if (assistant) {
-      assistant.text = `⚠️ ${msg}`
-      assistant.steps.push({ type: 'error', error: msg })
+    if (!assistant) return
+
+    if (err instanceof Error && err.name === 'AbortError') {
+      return
     }
+
+    const msg = err instanceof Error ? err.message : 'Connection failed.'
+    assistant.text = `⚠️ ${msg}`
+    assistant.steps.push({ type: 'error', error: msg })
   } finally {
+    streamAbort = null
+    streamReader = null
     isGenerating.value = false
     saveSessions()
   }
@@ -303,6 +346,8 @@ export function useChat() {
     deleteSession,
     clearSessionMessages,
     sendMessage,
+    stopGeneration,
+    sessionPath,
     loadSessions,
     saveSessions,
     loadConfig,

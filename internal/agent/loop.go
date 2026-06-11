@@ -418,8 +418,8 @@ func (s *Service) executeToolCall(ctx context.Context, req ChatRequest, runID, s
 	errText := ""
 	if execErr != nil {
 		errText = execErr.Error()
-		toolResult = s.text(i18n.AgentToolExecuteError, errText)
-		s.recordToolReflection(ctx, scope, tc.Function.Name, tc.Function.Arguments, errText, embedder)
+		toolResult = formatToolFailureMessage(s.profile(req.AgentID).Language, toolResult, execErr)
+		s.recordToolReflection(ctx, scope, tc.Function.Name, tc.Function.Arguments, toolResult, embedder)
 	}
 	s.logToolEvent(ctx, sessionID, tc.Function.Name, tc.Function.Arguments, toolResult, ok, errText)
 	if s.framework != nil && s.framework.Config.HooksEnabled {

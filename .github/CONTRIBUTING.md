@@ -60,7 +60,7 @@ cd apps/web && pnpm dev
 
 **Environment**
 
-- API keys via `.env` in project root or `%APPDATA%\VietClaw\.env` (Windows) / `~/.vietclaw/.env` (Unix).
+- API keys via `.env` in project root or `~/.vietclaw/.env` (override data dir with `VIETCLAW_DATA_DIR`).
 - Mock provider works without keys for basic agent loop testing.
 
 ## Making changes

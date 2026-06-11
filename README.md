@@ -90,10 +90,11 @@ The release workflow produces binaries for Linux, Windows, and macOS (amd64/arm6
 
 | OS | Default path |
 | --- | --- |
-| Windows | `%APPDATA%\VietClaw\` |
-| Linux / macOS | `~/.vietclaw/` |
+| All platforms | `~/.vietclaw/` (Windows: `%USERPROFILE%\.vietclaw\`) |
 
-Contains `config.json`, `vietclaw.db`, `workspace/`, and `logs/`.
+Override with `VIETCLAW_DATA_DIR`. Contains `config.json`, `vietclaw.db`, `workspace/`, and `logs/`.
+
+On Windows, older installs used `%APPDATA%\VietClaw\` — run `vietclaw doctor` for a migration hint if config is missing.
 
 ## Configuration
 
