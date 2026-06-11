@@ -1,5 +1,5 @@
 <script setup lang="ts">
-navigateTo('/', { replace: true })
+navigateTo('/settings/logs', { replace: true })
 </script>
 
 <template>

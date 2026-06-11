@@ -1,5 +1,5 @@
 <script setup lang="ts">
-navigateTo('/', { replace: true })
+navigateTo('/settings/memory', { replace: true })
 </script>
 
 <template>

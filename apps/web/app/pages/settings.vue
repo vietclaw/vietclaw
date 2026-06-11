@@ -1,7 +1,5 @@
-<script setup lang="ts">
-navigateTo('/', { replace: true })
-</script>
-
 <template>
-  <div />
+  <SettingsLayout>
+    <NuxtPage />
+  </SettingsLayout>
 </template>

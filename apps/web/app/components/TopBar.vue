@@ -1,20 +1,10 @@
 <script setup lang="ts">
-import { Menu, Edit2, Download } from '@lucide/vue'
+import { Menu, Download } from '@lucide/vue'
 
 defineEmits<{ toggleMobile: [] }>()
 
 const { currentSession } = useChat()
-const { status, online } = useDaemon()
-
-function renameSession() {
-  const s = currentSession()
-  if (!s) return
-  const name = prompt('Tên hội thoại:', s.title)
-  if (name?.trim()) {
-    s.title = name.trim()
-    useChat().saveSessions()
-  }
-}
+const { status } = useDaemon()
 
 function exportSession() {
   const s = currentSession()
@@ -30,32 +20,28 @@ function exportSession() {
 </script>
 
 <template>
-  <header class="z-20 flex h-12 items-center justify-between border-b border-zinc-800/60 bg-zinc-950/50 px-4 md:px-6 backdrop-blur-md">
+  <header class="flex h-12 shrink-0 items-center justify-between border-b border-vc-border-subtle px-4 md:px-6">
     <div class="flex min-w-0 items-center gap-2">
-      <button type="button" class="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-900 md:hidden" @click="$emit('toggleMobile')">
-        <Menu :size="18" />
+      <button type="button" class="vc-btn-ghost rounded-md p-1.5 md:hidden" @click="$emit('toggleMobile')">
+        <Menu :size="18" :stroke-width="1.75" />
       </button>
-      <span class="truncate text-sm font-medium text-zinc-200 max-w-[200px] md:max-w-md">
+      <span class="truncate text-sm text-vc-text-secondary md:hidden">
         {{ currentSession()?.title || 'Hội thoại' }}
       </span>
-      <button type="button" class="text-zinc-600 hover:text-zinc-400" @click="renameSession">
-        <Edit2 :size="13" />
-      </button>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-1">
       <button
         type="button"
-        class="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300"
-        title="Export JSON"
+        class="vc-btn-ghost rounded-md p-2"
+        title="Xuất JSON"
         @click="exportSession"
       >
-        <Download :size="16" />
+        <Download :size="15" :stroke-width="1.75" />
       </button>
-      <div class="hidden items-center gap-1.5 rounded-md border border-zinc-800 px-2 py-1 text-[10px] font-mono text-zinc-500 sm:flex">
-        <span class="h-1.5 w-1.5 rounded-full" :class="online ? 'bg-emerald-500' : 'bg-zinc-600'" />
-        <span>{{ status?.version || 'offline' }}</span>
-      </div>
+      <span v-if="status?.version" class="hidden text-xs text-vc-text-muted sm:inline font-mono">
+        {{ status.version }}
+      </span>
     </div>
   </header>
 </template>

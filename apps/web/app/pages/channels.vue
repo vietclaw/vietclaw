@@ -1,5 +1,5 @@
 <script setup lang="ts">
-navigateTo('/', { replace: true })
+navigateTo('/settings/channels', { replace: true })
 </script>
 
 <template>
