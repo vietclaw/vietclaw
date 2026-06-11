@@ -12,4 +12,7 @@ apps/web/node_modules/
 apps/web/.nuxt/
 apps/web/.output/
 apps/web/dist/
+# Embedded UI output — built by apps/web (pnpm build); CI builds before go test/build
+internal/web/dist/*
+!internal/web/dist/index.html
 scratch/

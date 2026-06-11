@@ -72,7 +72,7 @@ The daemon listens on `127.0.0.1:18636` by default.
 
 - Nuxt static web app in `apps/web`
 - Tailwind CSS v4 through the Vite plugin
-- Embedded UI dist served by Go from `internal/web/dist`
+- Web UI built in CI/dev (`pnpm build` → `internal/web/dist`), embedded into the Go binary — not committed to git
 - SPA fallback for `/chat`, `/memory`, `/providers`, `/budget`, `/logs`, `/channels`, and `/sessions`
 - GitHub Actions CI for web build, Go tests, and Go binary build
 - Tag-based release workflow with Linux, Windows, and macOS artifacts
