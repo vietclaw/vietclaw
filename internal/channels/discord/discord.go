@@ -20,6 +20,12 @@ type Adapter struct {
 	handler    *channels.Handler
 }
 
+func init() {
+	channels.RegisterAdapter(channels.PlatformDiscord, func(cfg config.Config, handler *channels.Handler) (channels.Adapter, error) {
+		return New(cfg.Channels.Discord, cfg.Channels.Attachments, handler), nil
+	})
+}
+
 func New(cfg config.DiscordConfig, attachment config.AttachmentConfig, handler *channels.Handler) *Adapter {
 	return &Adapter{cfg: cfg, attachment: attachment, handler: handler}
 }

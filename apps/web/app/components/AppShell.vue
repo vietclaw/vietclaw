@@ -33,9 +33,6 @@ watch(() => route.path, () => {
       </main>
     </div>
 
-    <!-- Global Modals -->
-    <SettingsModal />
-    <ImageGeneratorModal />
     <ToastContainer />
   </div>
 </template>

@@ -47,7 +47,7 @@ func (m *Mock) Chat(_ context.Context, req ChatRequest) (ChatResponse, error) {
 func (m *Mock) EstimateCost(req ChatRequest) CostEstimate {
 	return CostEstimate{
 		InputTokens:      EstimateMessagesTokens(req.Messages),
-		OutputTokens:     req.MaxOutputTokens,
+		OutputTokens:     OutputTokenBudget(req.MaxOutputTokens),
 		EstimatedCostUSD: 0,
 	}
 }

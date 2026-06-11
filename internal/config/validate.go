@@ -12,8 +12,8 @@ func Validate(cfg Config) error {
 	if cfg.Agent.MaxSteps < 0 {
 		return fmt.Errorf("agent.max_steps must be >= 0")
 	}
-	if cfg.Agent.MaxOutputTokens < 1 {
-		return fmt.Errorf("agent.max_output_tokens must be >= 1")
+	if cfg.Agent.MaxOutputTokens < 0 {
+		return fmt.Errorf("agent.max_output_tokens must be >= 0")
 	}
 	if cfg.Budget.DailyUSDLimit < 0 || cfg.Budget.RequireApprovalAboveUSD < 0 {
 		return fmt.Errorf("budget values must be >= 0")

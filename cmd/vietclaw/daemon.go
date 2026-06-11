@@ -15,11 +15,13 @@ import (
 	"vietclaw/internal/agent"
 	"vietclaw/internal/app"
 	"vietclaw/internal/channels"
-	discordchannel "vietclaw/internal/channels/discord"
-	telegramchannel "vietclaw/internal/channels/telegram"
+	_ "vietclaw/internal/channels/discord"
+	_ "vietclaw/internal/channels/telegram"
 	"vietclaw/internal/config"
+	"vietclaw/internal/framework"
 	"vietclaw/internal/db"
 	"vietclaw/internal/logging"
+	"vietclaw/internal/scheduler"
 	"vietclaw/internal/version"
 	webserver "vietclaw/internal/web"
 )
@@ -67,7 +69,9 @@ func runDaemon() error {
 		ConfigFile: paths.ConfigFile,
 		LogFile:    paths.LogFile,
 	}
-	application.Agent = agent.NewService(cfg, database).WithLogger(logger)
+	fw := framework.New(cfg.Framework, logger)
+	application.Framework = fw
+	application.Agent = agent.NewService(cfg, database).WithLogger(logger).WithFramework(fw)
 	application.Channels = newChannelManager(cfg, application.Agent, database, logger)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -75,6 +79,7 @@ func runDaemon() error {
 	if application.Channels != nil {
 		application.Channels.Start(ctx)
 	}
+	scheduler.NewHeartbeat(cfg, application.Agent, logger).Start(ctx)
 
 	server := &http.Server{
 		Addr:              addr,
@@ -107,12 +112,9 @@ func serveUntilStopped(ctx context.Context, server *http.Server, logger *log.Log
 
 func newChannelManager(cfg config.Config, service *agent.Service, database *sql.DB, logger *log.Logger) *channels.Manager {
 	handler := channels.NewHandler(service, database, logger)
-	adapters := []channels.Adapter{}
-	if cfg.Channels.Discord.Enabled {
-		adapters = append(adapters, discordchannel.New(cfg.Channels.Discord, cfg.Channels.Attachments, handler))
-	}
-	if cfg.Channels.Telegram.Enabled {
-		adapters = append(adapters, telegramchannel.New(cfg.Channels.Telegram, cfg.Channels.Attachments, handler))
+	adapters, err := channels.BuildAdapters(cfg, handler)
+	if err != nil && logger != nil {
+		logger.Printf("channel adapter warning: %v", err)
 	}
 	return channels.NewManager(cfg, logger, adapters)
 }

@@ -203,7 +203,7 @@ func (p *OpenAICompatible) Embed(ctx context.Context, text string) ([]float32, e
 
 func (p *OpenAICompatible) EstimateCost(req ChatRequest) CostEstimate {
 	inTokens := EstimateMessagesTokens(req.Messages)
-	outTokens := defaultOutputTokens(req.MaxOutputTokens)
+	outTokens := OutputTokenBudget(req.MaxOutputTokens)
 	return CostEstimate{
 		InputTokens:      inTokens,
 		OutputTokens:     outTokens,

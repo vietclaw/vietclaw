@@ -34,7 +34,22 @@ func runDoctor() error {
 	checkChannelEnv(channelTelegram, cfg.Channels.Telegram.Enabled, cfg.Channels.Telegram.TokenEnv)
 	checkPort(cfg)
 	checkDaemon(cfg)
+	checkFramework(cfg)
 	return nil
+}
+
+func checkFramework(cfg config.Config) {
+	if cfg.Framework.Enabled {
+		fmt.Println("[ok] agent framework enabled")
+	} else {
+		fmt.Println("[warn] agent framework disabled")
+	}
+	if cfg.Framework.DelegateEnabled {
+		fmt.Println("[ok] sub-agent delegation enabled")
+	}
+	if cfg.Framework.HooksEnabled {
+		fmt.Println("[ok] framework hooks enabled")
+	}
 }
 
 func printPathCheck(label string, ok bool) {

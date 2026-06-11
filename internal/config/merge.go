@@ -16,6 +16,7 @@ func MergeDefault(cfg Config, def Config) Config {
 	if cfg.Database.Path == "" {
 		cfg.Database.Path = def.Database.Path
 	}
+	cfg.Framework = mergeFramework(cfg.Framework, def.Framework)
 	cfg.Agent = mergeAgent(cfg.Agent, def.Agent)
 	cfg.Channels = mergeChannels(cfg.Channels, def.Channels)
 	if cfg.Providers == nil || len(cfg.Providers) == 0 {
@@ -35,7 +36,23 @@ func MergeDefault(cfg Config, def Config) Config {
 	return cfg
 }
 
+func mergeFramework(cfg FrameworkConfig, def FrameworkConfig) FrameworkConfig {
+	if !cfg.Enabled {
+		cfg.Enabled = def.Enabled
+	}
+	if !cfg.DelegateEnabled {
+		cfg.DelegateEnabled = def.DelegateEnabled
+	}
+	if !cfg.HooksEnabled {
+		cfg.HooksEnabled = def.HooksEnabled
+	}
+	return cfg
+}
+
 func mergeAgent(cfg AgentConfig, def AgentConfig) AgentConfig {
+	if cfg.Experience == "" {
+		cfg.Experience = def.Experience
+	}
 	if cfg.Name == "" {
 		cfg.Name = def.Name
 	}
@@ -60,11 +77,22 @@ func mergeAgent(cfg AgentConfig, def AgentConfig) AgentConfig {
 	if cfg.MaxHistoryMessages == 0 {
 		cfg.MaxHistoryMessages = def.MaxHistoryMessages
 	}
-	if cfg.MaxSteps == 0 {
-		cfg.MaxSteps = def.MaxSteps
+	cfg.Heartbeat = mergeHeartbeat(cfg.Heartbeat, def.Heartbeat)
+	return cfg
+}
+
+func mergeHeartbeat(cfg HeartbeatConfig, def HeartbeatConfig) HeartbeatConfig {
+	if cfg.IntervalSeconds == 0 {
+		cfg.IntervalSeconds = def.IntervalSeconds
 	}
-	if cfg.MaxOutputTokens == 0 {
-		cfg.MaxOutputTokens = def.MaxOutputTokens
+	if cfg.SessionID == "" {
+		cfg.SessionID = def.SessionID
+	}
+	if cfg.UserID == "" {
+		cfg.UserID = def.UserID
+	}
+	if cfg.Prompt == "" {
+		cfg.Prompt = def.Prompt
 	}
 	return cfg
 }

@@ -1,15 +1,8 @@
 package plugins
 
-type Builtins struct {
-	Providers []string `json:"providers"`
-	Tools     []string `json:"tools"`
-	Channels  []string `json:"channels"`
-}
+import "vietclaw/internal/framework"
 
-func BuiltinRegistry() Builtins {
-	return Builtins{
-		Providers: []string{"mock", "openai", "openai-compatible", "anthropic", "gemini", "http", "opencode-cli"},
-		Tools:     []string{"file_read", "file_write", "shell_exec", "mcp"},
-		Channels:  []string{"discord", "telegram"},
-	}
+// BuiltinRegistry returns the built-in extension catalog for the agent framework.
+func BuiltinRegistry() []framework.ExtensionInfo {
+	return framework.BuiltinExtensions()
 }

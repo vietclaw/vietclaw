@@ -16,13 +16,28 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 	return err
 }
 
-func (s *Service) insertRun(ctx context.Context, id, sessionID, intent, provider, model, status, summary string) error {
+func (s *Service) insertRun(ctx context.Context, id, sessionID, parentRunID, intent, provider, model, status, summary string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO agent_runs (id, session_id, intent, provider, model, status, summary, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, sessionID, intent, nullable(provider), nullable(model), status, summary, now, now)
+INSERT INTO agent_runs (id, session_id, parent_run_id, intent, provider, model, status, summary, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, sessionID, nullable(parentRunID), intent, nullable(provider), nullable(model), status, summary, now, now)
 	return err
+}
+
+func (s *Service) logToolEvent(ctx context.Context, sessionID, toolName, input, output string, ok bool, errText string) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	okVal := 0
+	if ok {
+		okVal = 1
+	}
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO tool_events (session_id, tool_name, input, output, ok, error, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		nullable(sessionID), toolName, input, output, okVal, nullable(errText), now)
+	if err != nil {
+		s.logf("tool event log error: %v", err)
+	}
 }
 
 func (s *Service) finishRun(ctx context.Context, id, status, summary, provider, model string) error {

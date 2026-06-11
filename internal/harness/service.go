@@ -37,9 +37,6 @@ func New(cfg config.Config, db *sql.DB) *Service {
 
 func (s *Service) harnessConfig() config.Config {
 	cfg := s.cfg
-	if cfg.Agent.MaxOutputTokens < 2048 {
-		cfg.Agent.MaxOutputTokens = 2048
-	}
 	return cfg
 }
 

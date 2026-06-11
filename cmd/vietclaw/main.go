@@ -25,7 +25,8 @@ const (
 	cmdHarness  = "harness"
 	cmdChannels = "channels"
 	cmdDiscord  = "discord"
-	cmdTelegram = "telegram"
+	cmdTelegram  = "telegram"
+	cmdFramework = "framework"
 )
 
 var (
@@ -76,6 +77,8 @@ func run(args []string) error {
 		return runDiscord(args[2:])
 	case cmdTelegram:
 		return runTelegram(args[2:])
+	case cmdFramework:
+		return runFramework(args[2:])
 	case "help", "-h", "--help":
 		printUsage()
 		return nil

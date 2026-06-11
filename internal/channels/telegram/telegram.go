@@ -24,6 +24,12 @@ type Adapter struct {
 	handler    *channels.Handler
 }
 
+func init() {
+	channels.RegisterAdapter(channels.PlatformTelegram, func(cfg config.Config, handler *channels.Handler) (channels.Adapter, error) {
+		return New(cfg.Channels.Telegram, cfg.Channels.Attachments, handler), nil
+	})
+}
+
 func New(cfg config.TelegramConfig, attachment config.AttachmentConfig, handler *channels.Handler) *Adapter {
 	return &Adapter{cfg: cfg, attachment: attachment, handler: handler}
 }

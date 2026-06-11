@@ -3,5 +3,5 @@ definePageMeta({ title: 'Workspace' })
 </script>
 
 <template>
-  <WorkspaceTabs />
+  <PromptWorkspace />
 </template>

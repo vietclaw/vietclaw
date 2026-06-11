@@ -19,11 +19,28 @@ type Manager struct {
 }
 
 func NewManager(cfg config.Config, logger *log.Logger, adapters []Adapter) *Manager {
-	statuses := map[string]Status{
-		PlatformDiscord:  {Name: PlatformDiscord, Enabled: cfg.Channels.Discord.Enabled},
-		PlatformTelegram: {Name: PlatformTelegram, Enabled: cfg.Channels.Telegram.Enabled},
+	statuses := map[string]Status{}
+	for _, name := range RegisteredAdapters() {
+		statuses[name] = Status{Name: name, Enabled: channelEnabled(cfg, name)}
+	}
+	for _, adapter := range adapters {
+		status := statuses[adapter.Name()]
+		status.Name = adapter.Name()
+		status.Enabled = true
+		statuses[adapter.Name()] = status
 	}
 	return &Manager{logger: logger, adapters: adapters, statuses: statuses}
+}
+
+func channelEnabled(cfg config.Config, name string) bool {
+	switch name {
+	case PlatformDiscord:
+		return cfg.Channels.Discord.Enabled
+	case PlatformTelegram:
+		return cfg.Channels.Telegram.Enabled
+	default:
+		return false
+	}
 }
 
 func (m *Manager) Start(ctx context.Context) {
@@ -59,7 +76,11 @@ func (m *Manager) Start(ctx context.Context) {
 func (m *Manager) Statuses() []Status {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return []Status{m.statuses[PlatformDiscord], m.statuses[PlatformTelegram]}
+	out := make([]Status, 0, len(m.statuses))
+	for _, status := range m.statuses {
+		out = append(out, status)
+	}
+	return out
 }
 
 func (m *Manager) setRunning(name string, running bool, errText string) {

@@ -8,6 +8,7 @@ import (
 	"vietclaw/internal/agent"
 	"vietclaw/internal/channels"
 	"vietclaw/internal/config"
+	"vietclaw/internal/framework"
 	"vietclaw/internal/version"
 )
 
@@ -21,5 +22,6 @@ type App struct {
 	ConfigFile string
 	LogFile    string
 	Agent      *agent.Service
+	Framework  *framework.Framework
 	Channels   *channels.Manager
 }

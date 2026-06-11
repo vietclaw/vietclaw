@@ -13,6 +13,7 @@
     "@nuxtjs/color-mode": "^3.5.2",
     "@tailwindcss/vite": "^4.1.17",
     "highlight.js": "^11.11.1",
+    "katex": "^0.17.0",
     "marked": "^18.0.5",
     "nuxt": "^4.2.1",
     "tailwindcss": "^4.1.17",

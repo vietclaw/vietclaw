@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { Menu, Edit2, Sparkles, Download } from '@lucide/vue'
+import { Menu, Edit2, Download } from '@lucide/vue'
 
 defineEmits<{ toggleMobile: [] }>()
 
-const { currentSession, sessions, currentSessionId } = useChat()
+const { currentSession } = useChat()
+const { status, online } = useDaemon()
 
 function renameSession() {
   const s = currentSession()
   if (!s) return
-  const name = prompt('Update session title:', s.title)
-  if (name && name.trim()) {
+  const name = prompt('Tên hội thoại:', s.title)
+  if (name?.trim()) {
     s.title = name.trim()
     useChat().saveSessions()
   }
@@ -17,7 +18,7 @@ function renameSession() {
 
 function exportSession() {
   const s = currentSession()
-  if (!s || (s.messages?.length ?? 0) === 0) return
+  if (!s?.messages?.length) return
   const json = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(s, null, 2))}`
   const link = document.createElement('a')
   link.href = json
@@ -29,33 +30,31 @@ function exportSession() {
 </script>
 
 <template>
-  <header class="h-14 border-b border-zinc-800/60 px-4 md:px-6 flex items-center justify-between bg-zinc-950/40 backdrop-blur-md z-20">
-    <div class="flex items-center gap-3">
-      <button class="md:hidden p-1.5 rounded hover:bg-zinc-900 text-zinc-400" @click="$emit('toggleMobile')">
-        <Menu :size="16" />
+  <header class="z-20 flex h-12 items-center justify-between border-b border-zinc-800/60 bg-zinc-950/50 px-4 md:px-6 backdrop-blur-md">
+    <div class="flex min-w-0 items-center gap-2">
+      <button type="button" class="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-900 md:hidden" @click="$emit('toggleMobile')">
+        <Menu :size="18" />
       </button>
-      <div class="flex items-center gap-2">
-        <span class="text-xs font-semibold text-zinc-200 max-w-[140px] md:max-w-xs truncate">
-          {{ currentSession()?.title || 'Untitled Session' }}
-        </span>
-        <button class="text-zinc-600 hover:text-zinc-400 transition-colors" @click="renameSession">
-          <Edit2 :size="12" />
-        </button>
-      </div>
+      <span class="truncate text-sm font-medium text-zinc-200 max-w-[200px] md:max-w-md">
+        {{ currentSession()?.title || 'Hội thoại' }}
+      </span>
+      <button type="button" class="text-zinc-600 hover:text-zinc-400" @click="renameSession">
+        <Edit2 :size="13" />
+      </button>
     </div>
 
     <div class="flex items-center gap-2">
       <button
-        class="p-1.5 rounded hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300 transition-colors"
-        title="Export Session (JSON)"
+        type="button"
+        class="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300"
+        title="Export JSON"
         @click="exportSession"
       >
         <Download :size="16" />
       </button>
-
-      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-400">
-        <span class="w-1.5 h-1.5 rounded-full bg-zinc-500" />
-        <span>web</span>
+      <div class="hidden items-center gap-1.5 rounded-md border border-zinc-800 px-2 py-1 text-[10px] font-mono text-zinc-500 sm:flex">
+        <span class="h-1.5 w-1.5 rounded-full" :class="online ? 'bg-emerald-500' : 'bg-zinc-600'" />
+        <span>{{ status?.version || 'offline' }}</span>
       </div>
     </div>
   </header>

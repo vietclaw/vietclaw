@@ -3,7 +3,10 @@ package contextbuilder
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
+
+	"golang.org/x/sync/singleflight"
 
 	"vietclaw/internal/config"
 	"vietclaw/internal/i18n"
@@ -14,10 +17,11 @@ import (
 )
 
 type Builder struct {
-	cfg    config.Config
-	db     *sql.DB
-	mem    *memory.Store
-	router *router.ModelRouter
+	cfg            config.Config
+	db             *sql.DB
+	mem            *memory.Store
+	router         *router.ModelRouter
+	summarizeGroup singleflight.Group
 }
 
 func New(cfg config.Config, db *sql.DB, mem *memory.Store) *Builder {
@@ -43,11 +47,15 @@ func (b *Builder) Messages(ctx context.Context, sessionID, userID, userMessage s
 
 	parts := []string{i18n.T(lang, i18n.SystemPromptBase, agentName)}
 	scope := scopeForUser(userID)
-	memories, _ := b.mem.SearchHybrid(ctx, scope, userMessage, 6, embedder)
-	if len(memories) > 0 {
+	hybrid, _ := b.mem.SearchHybrid(ctx, scope, userMessage, 9, embedder)
+	coreMemories, experiences := splitMemories(hybrid, 6, 3)
+	if len(coreMemories) > 0 || len(experiences) > 0 {
 		lines := []string{i18n.T(lang, i18n.SystemMemoryHeader)}
-		for _, rec := range memories {
+		for _, rec := range coreMemories {
 			lines = append(lines, "- "+rec.Content)
+		}
+		for _, rec := range experiences {
+			lines = append(lines, "- [lesson] "+rec.Content)
 		}
 		parts = append(parts, strings.Join(lines, "\n"))
 	}
@@ -68,7 +76,12 @@ func (b *Builder) Messages(ctx context.Context, sessionID, userID, userMessage s
 	}
 
 	if sessionID != "" && b.router != nil {
-		go b.summarizeIfNeeded(context.Background(), sessionID, b.router)
+		go func() {
+			_, _, _ = b.summarizeGroup.Do(sessionID, func() (any, error) {
+				b.summarizeIfNeeded(context.Background(), sessionID, b.router)
+				return nil, nil
+			})
+		}()
 	}
 
 	system := trimTo(strings.Join(parts, "\n\n"), maxChars)
@@ -76,6 +89,23 @@ func (b *Builder) Messages(ctx context.Context, sessionID, userID, userMessage s
 		{Role: "system", Content: system},
 		{Role: "user", Content: userMessage},
 	}, nil
+}
+
+func splitMemories(records []memory.Record, coreLimit, expLimit int) ([]memory.Record, []memory.Record) {
+	core := make([]memory.Record, 0, coreLimit)
+	exp := make([]memory.Record, 0, expLimit)
+	for _, rec := range records {
+		if rec.Kind == memory.KindExperience {
+			if len(exp) < expLimit {
+				exp = append(exp, rec)
+			}
+			continue
+		}
+		if len(core) < coreLimit {
+			core = append(core, rec)
+		}
+	}
+	return core, exp
 }
 
 func scopeForUser(userID string) string {
@@ -129,7 +159,7 @@ func (b *Builder) summarizeIfNeeded(ctx context.Context, sessionID string, r *ro
 		return
 	}
 
-	prompt := "Tóm tắt ngắn gọn các ý chính và diễn biến cuộc hội thoại dưới đây bằng tiếng Việt để làm ngữ cảnh cho AI. Chỉ trả về văn bản tóm tắt ngắn gọn, không có thêm lời dẫn hay định dạng khác:\n\n" + strings.Join(conv, "\n")
+	prompt := fmt.Sprintf(i18n.T(b.cfg.Agent.Language, i18n.SystemSummarizePrompt), strings.Join(conv, "\n"))
 	resp, err := selection.Provider.Chat(ctx, providers.ChatRequest{
 		Model:           selection.Model,
 		MaxOutputTokens: 256,

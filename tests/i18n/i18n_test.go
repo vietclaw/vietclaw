@@ -25,3 +25,17 @@ func TestUnknownLanguageFallsBackToVietnamese(t *testing.T) {
 		t.Fatalf("unexpected fallback text: %q", got)
 	}
 }
+
+func TestToolUILabel(t *testing.T) {
+	vi := i18n.ToolUILabel("vi", "web_fetch")
+	if vi != "Đã truy cập" {
+		t.Fatalf("vi web_fetch = %q", vi)
+	}
+	en := i18n.ToolUILabel("en", "web_fetch")
+	if en != "Fetched page" {
+		t.Fatalf("en web_fetch = %q", en)
+	}
+	if got := i18n.ToolUILabel("vi", "unknown_tool_xyz"); got != "unknown_tool_xyz" {
+		t.Fatalf("unknown tool fallback = %q", got)
+	}
+}

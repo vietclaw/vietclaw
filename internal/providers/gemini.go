@@ -235,7 +235,7 @@ func (p *Gemini) Embed(ctx context.Context, text string) ([]float32, error) {
 
 func (p *Gemini) EstimateCost(req ChatRequest) CostEstimate {
 	inTokens := EstimateMessagesTokens(req.Messages)
-	outTokens := defaultOutputTokens(req.MaxOutputTokens)
+	outTokens := OutputTokenBudget(req.MaxOutputTokens)
 	return CostEstimate{
 		InputTokens:      inTokens,
 		OutputTokens:     outTokens,

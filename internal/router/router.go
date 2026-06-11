@@ -52,7 +52,12 @@ func (r *ModelRouter) Classify(ctx context.Context, message, language string) In
 }
 
 func (r *ModelRouter) Select(ctx context.Context, req providers.ChatRequest, excludeIDs []string) (Selection, error) {
-	provider := r.defaultProvider(excludeIDs)
+	return r.SelectForProfile(ctx, req, excludeIDs, nil)
+}
+
+func (r *ModelRouter) SelectForProfile(ctx context.Context, req providers.ChatRequest, excludeIDs []string, allowedProviderIDs []string) (Selection, error) {
+	pool := r.providersForProfile(allowedProviderIDs)
+	provider := r.defaultProviderFrom(pool, excludeIDs)
 	if provider == nil {
 		return Selection{}, fmt.Errorf("no fallback provider available")
 	}

@@ -16,14 +16,19 @@ const (
 	DefaultRuntimeMode        = "eco"
 	DefaultMaxConcurrentTasks = 1
 
+	DefaultAgentExperience        = "prompt"
 	DefaultAgentLanguage          = "vi"
 	DefaultAgentStyle             = "natural_short"
 	DefaultAgentID                = "default"
 	DefaultSkillDir               = ".codex/skills"
 	DefaultMaxContextChars        = 24000
 	DefaultMaxHistoryMessages     = 12
-	DefaultMaxAgentSteps          = 0
-	DefaultMaxOutputTokens        = 512
+	DefaultMaxAgentSteps          = 0 // 0 = unlimited; prompt-first UX
+	DefaultHeartbeatIntervalSec   = 1800
+	DefaultHeartbeatSessionID     = "heartbeat"
+	DefaultHeartbeatUserID        = "local"
+	DefaultHeartbeatPrompt        = "Heartbeat: review pending tasks, scheduled reminders, and anything the user may need proactively. Reply briefly or stay silent if nothing is needed."
+	DefaultMaxOutputTokens        = 0 // 0 = unlimited; model decides response length
 	DefaultDiscordTokenEnv        = "VIETCLAW_DISCORD_TOKEN"
 	DefaultTelegramTokenEnv       = "VIETCLAW_TELEGRAM_TOKEN"
 	DefaultRespondMentionOrReply  = "mention_or_reply"
@@ -50,6 +55,11 @@ const (
 
 func Default(paths Paths) Config {
 	return Config{
+		Framework: FrameworkConfig{
+			Enabled:         true,
+			DelegateEnabled: true,
+			HooksEnabled:    true,
+		},
 		Server: ServerConfig{
 			Host: DefaultHost,
 			Port: DefaultPort,
@@ -62,6 +72,7 @@ func Default(paths Paths) Config {
 			Path: filepath.Join(paths.DataDir, DatabaseName),
 		},
 		Agent: AgentConfig{
+			Experience:         DefaultAgentExperience,
 			Name:               AppName,
 			Language:           DefaultAgentLanguage,
 			Style:              DefaultAgentStyle,
@@ -72,6 +83,15 @@ func Default(paths Paths) Config {
 			MaxHistoryMessages: DefaultMaxHistoryMessages,
 			MaxSteps:           DefaultMaxAgentSteps,
 			MaxOutputTokens:    DefaultMaxOutputTokens,
+			Reflexion:          ReflexionConfig{Enabled: true},
+			Heartbeat: HeartbeatConfig{
+				Enabled:         false,
+				IntervalSeconds: DefaultHeartbeatIntervalSec,
+				SessionID:       DefaultHeartbeatSessionID,
+				UserID:          DefaultHeartbeatUserID,
+				Prompt:          DefaultHeartbeatPrompt,
+			},
+			MemoryTools: MemoryToolsConfig{Enabled: true},
 		},
 		Channels: ChannelsConfig{
 			Attachments: AttachmentConfig{

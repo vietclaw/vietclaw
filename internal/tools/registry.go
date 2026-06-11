@@ -8,6 +8,7 @@ import (
 
 	"vietclaw/internal/config"
 	"vietclaw/internal/i18n"
+	"vietclaw/internal/memory"
 	"vietclaw/internal/providers"
 )
 
@@ -18,11 +19,13 @@ const (
 )
 
 type ToolRegistry struct {
-	policy Policy
-	cfg    config.Config
-	tools  map[string]Tool
-	mcp    map[string]mcpToolRef
-	defs   []providers.ToolDefinition
+	policy    Policy
+	cfg       config.Config
+	mem       *memory.Store
+	tools     map[string]Tool
+	mcp       map[string]mcpToolRef
+	defs      []providers.ToolDefinition
+	extraDefs []providers.ToolDefinition
 }
 
 type mcpToolRef struct {
@@ -60,6 +63,28 @@ func NewRegistry(cfg config.Config) *ToolRegistry {
 	registerExtraTools(r.tools, p)
 
 	r.discoverMCP(context.Background())
+	return r
+}
+
+func (r *ToolRegistry) Register(tool Tool, def providers.ToolDefinition) {
+	name := normalizeToolName(def.Function.Name)
+	if name == "" {
+		name = normalizeToolName(tool.Name())
+		def.Function.Name = name
+	}
+	r.tools[name] = tool
+	r.extraDefs = append(r.extraDefs, def)
+}
+
+func (r *ToolRegistry) WithMemory(mem *memory.Store) *ToolRegistry {
+	if mem == nil {
+		return r
+	}
+	r.mem = mem
+	if r.cfg.Agent.MemoryTools.Enabled {
+		r.tools[toolMemoryRecall] = MemoryRecall{Store: mem}
+		r.tools[toolMemoryStore] = MemoryStore{Store: mem}
+	}
 	return r
 }
 
@@ -105,8 +130,15 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, argsJSON string
 }
 
 func (r *ToolRegistry) GetDefinitions() []providers.ToolDefinition {
+	return r.GetDefinitionsForProfile(config.AgentProfileConfig{}, true)
+}
+
+func (r *ToolRegistry) GetDefinitionsForProfile(profile config.AgentProfileConfig, includeDelegate bool) []providers.ToolDefinition {
+	lang := profile.Language
+	if lang == "" {
+		lang = r.cfg.Agent.Language
+	}
 	var list []providers.ToolDefinition
-	lang := r.cfg.Agent.Language
 
 	if r.cfg.Tools.Files.Enabled {
 		list = append(list, providers.ToolDefinition{
@@ -426,8 +458,18 @@ func (r *ToolRegistry) GetDefinitions() []providers.ToolDefinition {
 		},
 	})
 
+	if r.cfg.Agent.MemoryTools.Enabled && r.mem != nil {
+		list = append(list, memoryToolDefinitions(r.cfg.Agent.Language)...)
+	}
 	list = append(list, extraToolDefinitions()...)
+	list = append(list, r.extraDefs...)
 	list = append(list, r.defs...)
+	if includeDelegate && r.cfg.Framework.DelegateEnabled {
+		list = append(list, AgentDelegateDefinition())
+	}
+	if len(profile.Tools) > 0 {
+		list = filterDefinitions(list, profile.Tools)
+	}
 	return list
 }
 

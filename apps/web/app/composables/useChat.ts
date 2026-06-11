@@ -161,7 +161,10 @@ function parseSSEBlock(block: string): SSEEvent | null {
   return { event, data: data.join('\n') }
 }
 
-function applySSEEvent(event: SSEEvent, session: ChatSession, assistantMsg: ChatItem): boolean {
+function applySSEEvent(event: SSEEvent, session: ChatSession, msgIndex: number): boolean {
+  const assistantMsg = session.messages[msgIndex]
+  if (!assistantMsg) return true
+
   if (event.event === 'done') return true
   if (event.event === 'error') {
     const parsed = JSON.parse(event.data)
@@ -218,8 +221,8 @@ async function sendMessage(text: string) {
 
   isGenerating.value = true
 
-  const assistantMsg: ChatItem = { role: 'assistant', text: '', steps: [] }
-  s.messages.push(assistantMsg)
+  const msgIndex = s.messages.length
+  s.messages.push({ role: 'assistant', text: '', steps: [] })
 
   try {
     const res = await fetch('/api/chat/stream', {
@@ -259,10 +262,13 @@ async function sendMessage(text: string) {
         const event = parseSSEBlock(block)
         if (!event) continue
         try {
-          stop = applySSEEvent(event, s, assistantMsg)
+          stop = applySSEEvent(event, s, msgIndex)
           await yieldToUI()
         } catch {
-          assistantMsg.steps.push({ type: 'error', error: 'Invalid stream event' })
+          const msg = s.messages[msgIndex]
+          if (msg) {
+            msg.steps.push({ type: 'error', error: 'Invalid stream event' })
+          }
           stop = true
         }
         if (stop) break
@@ -273,8 +279,11 @@ async function sendMessage(text: string) {
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Connection failed.'
-    assistantMsg.text = `⚠️ ${msg}`
-    assistantMsg.steps.push({ type: 'error', error: msg })
+    const assistant = s.messages[msgIndex]
+    if (assistant) {
+      assistant.text = `⚠️ ${msg}`
+      assistant.steps.push({ type: 'error', error: msg })
+    }
   } finally {
     isGenerating.value = false
     saveSessions()

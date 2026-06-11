@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS memories (
   content TEXT NOT NULL,
   confidence REAL NOT NULL DEFAULT 1.0,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  embedding BLOB
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -76,6 +77,7 @@ CREATE TABLE IF NOT EXISTS tool_events (
 CREATE TABLE IF NOT EXISTS agent_runs (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL,
+  parent_run_id TEXT,
   intent TEXT NOT NULL,
   provider TEXT,
   model TEXT,

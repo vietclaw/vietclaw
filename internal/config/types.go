@@ -9,6 +9,7 @@ type Paths struct {
 
 type Config struct {
 	Server    ServerConfig         `json:"server"`
+	Framework FrameworkConfig      `json:"framework"`
 	Runtime   RuntimeConfig        `json:"runtime"`
 	Database  DatabaseConfig       `json:"database"`
 	Agent     AgentConfig          `json:"agent"`
@@ -35,16 +36,42 @@ type DatabaseConfig struct {
 }
 
 type AgentConfig struct {
-	Name               string   `json:"name"`
-	Language           string   `json:"language"`
-	Style              string   `json:"style"`
-	DefaultMode        string   `json:"default_mode"`
-	Workspace          string   `json:"workspace"`
-	SkillDirs          []string `json:"skill_dirs"`
-	MaxContextChars    int      `json:"max_context_chars"`
-	MaxHistoryMessages int      `json:"max_history_messages"`
-	MaxSteps           int      `json:"max_steps"`
-	MaxOutputTokens    int      `json:"max_output_tokens"`
+	Experience         string           `json:"experience"` // prompt | pro
+	Name               string           `json:"name"`
+	Language           string           `json:"language"`
+	Style              string           `json:"style"`
+	DefaultMode        string           `json:"default_mode"`
+	Workspace          string           `json:"workspace"`
+	SkillDirs          []string         `json:"skill_dirs"`
+	MaxContextChars    int              `json:"max_context_chars"`
+	MaxHistoryMessages int              `json:"max_history_messages"`
+	MaxSteps           int              `json:"max_steps"`
+	MaxOutputTokens    int              `json:"max_output_tokens"`
+	Reflexion          ReflexionConfig  `json:"reflexion"`
+	Heartbeat          HeartbeatConfig  `json:"heartbeat"`
+	MemoryTools        MemoryToolsConfig `json:"memory_tools"`
+}
+
+type ReflexionConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
+type HeartbeatConfig struct {
+	Enabled         bool   `json:"enabled"`
+	IntervalSeconds int    `json:"interval_seconds"`
+	SessionID       string `json:"session_id"`
+	UserID          string `json:"user_id"`
+	Prompt          string `json:"prompt"`
+}
+
+type MemoryToolsConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
+type FrameworkConfig struct {
+	Enabled         bool `json:"enabled"`
+	DelegateEnabled bool `json:"delegate_enabled"`
+	HooksEnabled    bool `json:"hooks_enabled"`
 }
 
 type AgentProfileConfig struct {
@@ -55,6 +82,7 @@ type AgentProfileConfig struct {
 	Tools       []string `json:"tools,omitempty"`
 	Providers   []string `json:"providers,omitempty"`
 	MemoryScope string   `json:"memory_scope"`
+	MaxSteps    int      `json:"max_steps,omitempty"`
 }
 
 type ChannelsConfig struct {

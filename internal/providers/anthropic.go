@@ -50,7 +50,7 @@ func (p *Anthropic) Chat(ctx context.Context, req ChatRequest) (ChatResponse, er
 
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(model),
-		MaxTokens: int64(defaultOutputTokens(req.MaxOutputTokens)),
+		MaxTokens: AnthropicMaxOutputTokens(req.MaxOutputTokens),
 		Messages:  messages,
 	}
 	if systemPrompt != "" {
@@ -107,7 +107,7 @@ func (p *Anthropic) ChatStream(ctx context.Context, req ChatRequest) (<-chan Str
 
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(model),
-		MaxTokens: int64(defaultOutputTokens(req.MaxOutputTokens)),
+		MaxTokens: AnthropicMaxOutputTokens(req.MaxOutputTokens),
 		Messages:  messages,
 	}
 	if systemPrompt != "" {
@@ -148,7 +148,7 @@ func (p *Anthropic) ChatStream(ctx context.Context, req ChatRequest) (<-chan Str
 
 func (p *Anthropic) EstimateCost(req ChatRequest) CostEstimate {
 	inTokens := EstimateMessagesTokens(req.Messages)
-	outTokens := defaultOutputTokens(req.MaxOutputTokens)
+	outTokens := OutputTokenBudget(req.MaxOutputTokens)
 	return CostEstimate{
 		InputTokens:      inTokens,
 		OutputTokens:     outTokens,

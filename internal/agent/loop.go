@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"vietclaw/internal/config"
+	"vietclaw/internal/framework"
 	"vietclaw/internal/i18n"
 	"vietclaw/internal/providers"
 	"vietclaw/internal/router"
@@ -27,7 +27,7 @@ func (s *Service) ChatStream(ctx context.Context, req ChatRequest) (<-chan provi
 
 	intent := s.router.Classify(ctx, req.Message, s.Language())
 	runID := newID("run")
-	if err := s.insertRun(ctx, runID, req.SessionID, string(intent), "", "", RunStatusRunning, ""); err != nil {
+	if err := s.insertRun(ctx, runID, req.SessionID, "", string(intent), "", "", RunStatusRunning, ""); err != nil {
 		return nil, err
 	}
 
@@ -51,7 +51,7 @@ func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID str
 	messages = s.applyProfilePersona(req, messages)
 
 	chatReq := s.loopChatRequest(req, messages)
-	selection, excludedProviders, err := s.selectLoopProvider(ctx, chatReq, nil)
+	selection, excludedProviders, err := s.selectLoopProvider(ctx, req, chatReq, nil)
 	if err != nil {
 		return s.selectionError(ctx, req, runID, intent, err), nil
 	}
@@ -62,9 +62,16 @@ func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID str
 	var finalModel string
 	var totalCost float64
 	var accumulatedText string
+	maxSteps := s.profileMaxSteps(req.AgentID)
+	toolCtx := s.toolContext(ctx, req)
+	scope := s.memoryScope(req)
 
-	for {
-		providerResp, nextSelection, nextExcluded, err := s.chatWithFallback(ctx, chatReq, selection, excludedProviders)
+	for step := 1; ; step++ {
+		if maxSteps > 0 && step > maxSteps {
+			finalReply = finalizeAtMaxSteps(accumulatedText, s.text(i18n.AgentMaxStepsReached))
+			break
+		}
+		providerResp, nextSelection, nextExcluded, err := s.chatWithFallback(ctx, chatReq, selection, excludedProviders, s.profile(req.AgentID).Providers)
 		if err != nil {
 			_ = s.finishRun(ctx, runID, RunStatusFailed, err.Error(), selection.Provider.ID(), selection.Model)
 			return ChatResponse{
@@ -97,7 +104,7 @@ func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID str
 			if err := s.addMessage(ctx, req.SessionID, RoleAssistant, accumulatedText); err != nil {
 				return ChatResponse{}, err
 			}
-			if err := s.executeToolCalls(ctx, req.SessionID, providerResp.ToolCalls, &chatReq); err != nil {
+			if err := s.executeToolCalls(toolCtx, req, runID, req.SessionID, providerResp.ToolCalls, &chatReq, scope, embedder); err != nil {
 				return ChatResponse{}, err
 			}
 			continue
@@ -145,7 +152,7 @@ func (s *Service) StreamAgenticLoop(ctx context.Context, req ChatRequest, runID 
 		messages = s.applyProfilePersona(req, messages)
 
 		chatReq := s.loopChatRequest(req, messages)
-		selection, excludedProviders, err := s.selectLoopProvider(ctx, chatReq, nil)
+		selection, excludedProviders, err := s.selectLoopProvider(ctx, req, chatReq, nil)
 		if err != nil {
 			resp := s.selectionError(ctx, req, runID, intent, err)
 			ch <- providers.StreamChunk{Error: resp.Error}
@@ -157,9 +164,25 @@ func (s *Service) StreamAgenticLoop(ctx context.Context, req ChatRequest, runID 
 		var finalModel string
 		var totalCost float64
 		var accumulatedText string
+		maxSteps := s.profileMaxSteps(req.AgentID)
+		toolCtx := s.toolContext(ctx, req)
+		scope := s.memoryScope(req)
 
-		for {
-			attempt, nextSelection, nextExcluded, err := s.streamWithFallback(ctx, ch, chatReq, selection, excludedProviders)
+		for step := 1; ; step++ {
+			if err := ctx.Err(); err != nil {
+				_ = s.finishRun(ctx, runID, RunStatusFailed, err.Error(), finalProvider, finalModel)
+				ch <- providers.StreamChunk{Error: err.Error()}
+				return
+			}
+			if maxSteps > 0 && step > maxSteps {
+				before := accumulatedText
+				accumulatedText = finalizeAtMaxSteps(accumulatedText, s.text(i18n.AgentMaxStepsReached))
+				if len(accumulatedText) > len(before) {
+					ch <- providers.StreamChunk{Event: "text", Text: accumulatedText[len(before):]}
+				}
+				break
+			}
+			attempt, nextSelection, nextExcluded, err := s.streamWithFallback(ctx, ch, chatReq, selection, excludedProviders, s.profile(req.AgentID).Providers)
 			if err != nil {
 				_ = s.finishRun(ctx, runID, RunStatusFailed, err.Error(), selection.Provider.ID(), selection.Model)
 				ch <- providers.StreamChunk{Error: err.Error()}
@@ -196,7 +219,7 @@ func (s *Service) StreamAgenticLoop(ctx context.Context, req ChatRequest, runID 
 						ToolName:  tc.Function.Name,
 						ToolInput: tc.Function.Arguments,
 					}
-					toolResult, err := s.executeToolCall(ctx, req.SessionID, tc, &chatReq)
+					toolResult, err := s.executeToolCall(toolCtx, req, runID, req.SessionID, tc, &chatReq, scope, embedder)
 					if err != nil {
 						ch <- providers.StreamChunk{Error: err.Error()}
 						return
@@ -237,13 +260,22 @@ func (s *Service) streamRuleResponse(ctx context.Context, req ChatRequest, runID
 			ch <- providers.StreamChunk{Error: err.Error()}
 			return
 		}
-		ch <- providers.StreamChunk{Text: resp.Reply}
+		const chunkSize = 64
+		text := resp.Reply
+		for i := 0; i < len(text); i += chunkSize {
+			end := i + chunkSize
+			if end > len(text) {
+				end = len(text)
+			}
+			ch <- providers.StreamChunk{Event: "text", Text: text[i:end]}
+		}
 		ch <- providers.StreamChunk{Done: true}
 	}()
 	return ch, nil
 }
 
 func (s *Service) loopChatRequest(req ChatRequest, messages []providers.Message) providers.ChatRequest {
+	includeDelegate := s.cfg.Framework.Enabled && s.cfg.Framework.DelegateEnabled
 	return providers.ChatRequest{
 		SessionID:       req.SessionID,
 		Messages:        messages,
@@ -253,21 +285,19 @@ func (s *Service) loopChatRequest(req ChatRequest, messages []providers.Message)
 			"user_id":  req.UserID,
 			"channel":  req.Channel,
 			"mode":     req.Mode,
-			"language": s.Language(),
+			"language": s.profileLanguage(req.AgentID),
 		},
-		Tools: s.tools.GetDefinitions(),
+		Tools: s.tools.GetDefinitionsForProfile(s.profile(req.AgentID), includeDelegate),
 	}
 }
 
 func (s *Service) maxOutputTokens() int {
-	if s.cfg.Agent.MaxOutputTokens > 0 {
-		return s.cfg.Agent.MaxOutputTokens
-	}
-	return config.DefaultMaxOutputTokens
+	return s.cfg.Agent.MaxOutputTokens
 }
 
-func (s *Service) selectLoopProvider(ctx context.Context, req providers.ChatRequest, excluded []string) (router.Selection, []string, error) {
-	selection, err := s.router.Select(ctx, req, excluded)
+func (s *Service) selectLoopProvider(ctx context.Context, req ChatRequest, chatReq providers.ChatRequest, excluded []string) (router.Selection, []string, error) {
+	allowed := s.profile(req.AgentID).Providers
+	selection, err := s.router.SelectForProfile(ctx, chatReq, excluded, allowed)
 	return selection, excluded, err
 }
 
@@ -285,7 +315,7 @@ func (s *Service) selectionError(ctx context.Context, req ChatRequest, runID str
 	}
 }
 
-func (s *Service) chatWithFallback(ctx context.Context, req providers.ChatRequest, selection router.Selection, excluded []string) (providers.ChatResponse, router.Selection, []string, error) {
+func (s *Service) chatWithFallback(ctx context.Context, req providers.ChatRequest, selection router.Selection, excluded []string, allowed []string) (providers.ChatResponse, router.Selection, []string, error) {
 	for {
 		resp, err := selection.Provider.Chat(ctx, req)
 		if err == nil {
@@ -293,7 +323,7 @@ func (s *Service) chatWithFallback(ctx context.Context, req providers.ChatReques
 		}
 		s.logf("provider %s chat error: %v", selection.Provider.ID(), err)
 		excluded = append(excluded, selection.Provider.ID())
-		next, fallbackErr := s.router.Select(ctx, req, excluded)
+		next, fallbackErr := s.router.SelectForProfile(ctx, req, excluded, allowed)
 		if fallbackErr != nil {
 			return providers.ChatResponse{}, selection, excluded, err
 		}
@@ -307,13 +337,13 @@ type streamAttempt struct {
 	toolCalls []providers.ToolCall
 }
 
-func (s *Service) streamWithFallback(ctx context.Context, out chan<- providers.StreamChunk, req providers.ChatRequest, selection router.Selection, excluded []string) (streamAttempt, router.Selection, []string, error) {
+func (s *Service) streamWithFallback(ctx context.Context, out chan<- providers.StreamChunk, req providers.ChatRequest, selection router.Selection, excluded []string, allowed []string) (streamAttempt, router.Selection, []string, error) {
 	for {
 		streamCh, err := selection.Provider.ChatStream(ctx, req)
 		if err != nil {
 			s.logf("provider %s stream init error: %v", selection.Provider.ID(), err)
 			excluded = append(excluded, selection.Provider.ID())
-			next, fallbackErr := s.router.Select(ctx, req, excluded)
+			next, fallbackErr := s.router.SelectForProfile(ctx, req, excluded, allowed)
 			if fallbackErr != nil {
 				return streamAttempt{}, selection, excluded, err
 			}
@@ -343,7 +373,7 @@ func (s *Service) streamWithFallback(ctx context.Context, out chan<- providers.S
 
 		s.logf("provider %s stream generation error: %s", selection.Provider.ID(), failed)
 		excluded = append(excluded, selection.Provider.ID())
-		next, fallbackErr := s.router.Select(ctx, req, excluded)
+		next, fallbackErr := s.router.SelectForProfile(ctx, req, excluded, allowed)
 		if fallbackErr != nil {
 			return streamAttempt{}, selection, excluded, fmt.Errorf("%s", failed)
 		}
@@ -352,22 +382,58 @@ func (s *Service) streamWithFallback(ctx context.Context, out chan<- providers.S
 	}
 }
 
-func (s *Service) executeToolCalls(ctx context.Context, sessionID string, calls []providers.ToolCall, req *providers.ChatRequest) error {
+func (s *Service) executeToolCalls(ctx context.Context, req ChatRequest, runID, sessionID string, calls []providers.ToolCall, chatReq *providers.ChatRequest, scope string, embedder providers.Provider) error {
 	for _, tc := range calls {
-		if _, err := s.executeToolCall(ctx, sessionID, tc, req); err != nil {
+		if _, err := s.executeToolCall(ctx, req, runID, sessionID, tc, chatReq, scope, embedder); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *Service) executeToolCall(ctx context.Context, sessionID string, tc providers.ToolCall, req *providers.ChatRequest) (string, error) {
-	toolResult, err := s.tools.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
-	if err != nil {
-		toolResult = s.text(i18n.AgentToolExecuteError, err.Error())
+func finalizeAtMaxSteps(accumulated, limitMsg string) string {
+	if strings.TrimSpace(accumulated) == "" {
+		return limitMsg
+	}
+	return accumulated + "\n\n" + limitMsg
+}
+
+func (s *Service) executeToolCall(ctx context.Context, req ChatRequest, runID, sessionID string, tc providers.ToolCall, chatReq *providers.ChatRequest, scope string, embedder providers.Provider) (string, error) {
+	var toolResult string
+	var execErr error
+	if s.isFrameworkTool(tc.Function.Name) {
+		toolResult, execErr = s.handleDelegate(ctx, req, runID, tc.Function.Arguments)
+	} else if s.framework != nil && s.framework.Config.HooksEnabled {
+		_ = s.framework.Hooks.Emit(ctx, framework.EventBeforeTool, framework.HookContext{
+			SessionID: sessionID,
+			AgentID:   req.AgentID,
+			ToolName:  tc.Function.Name,
+			ToolInput: tc.Function.Arguments,
+		})
+		toolResult, execErr = s.tools.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
+	} else {
+		toolResult, execErr = s.tools.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
+	}
+	ok := execErr == nil
+	errText := ""
+	if execErr != nil {
+		errText = execErr.Error()
+		toolResult = s.text(i18n.AgentToolExecuteError, errText)
+		s.recordToolReflection(ctx, scope, tc.Function.Name, tc.Function.Arguments, errText, embedder)
+	}
+	s.logToolEvent(ctx, sessionID, tc.Function.Name, tc.Function.Arguments, toolResult, ok, errText)
+	if s.framework != nil && s.framework.Config.HooksEnabled {
+		_ = s.framework.Hooks.Emit(ctx, framework.EventAfterTool, framework.HookContext{
+			SessionID:  sessionID,
+			AgentID:    req.AgentID,
+			ToolName:   tc.Function.Name,
+			ToolInput:  tc.Function.Arguments,
+			ToolOutput: toolResult,
+			ToolError:  errText,
+		})
 	}
 
-	req.Messages = append(req.Messages, providers.Message{
+	chatReq.Messages = append(chatReq.Messages, providers.Message{
 		Role:       "tool",
 		Name:       tc.Function.Name,
 		ToolCallID: tc.ID,

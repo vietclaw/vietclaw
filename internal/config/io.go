@@ -15,9 +15,13 @@ func EnsureDefault(paths Paths) (Config, bool, error) {
 		return Config{}, false, fmt.Errorf("create log dir: %w", err)
 	}
 
-	cfg, err := Load(paths.ConfigFile)
+	cfg, raw, err := LoadWithRaw(paths.ConfigFile)
 	if err == nil {
-		merged := MergeDefault(cfg, Default(paths))
+		def := Default(paths)
+		merged := MergeDefault(cfg, def)
+		merged.Agent = MergeAgentOptional(merged.Agent, def.Agent, raw)
+		merged.Framework = MergeFrameworkOptional(merged.Framework, def.Framework, raw)
+		merged = ApplyLegacyMigrations(merged)
 		if !Equal(cfg, merged) {
 			if err := Save(paths.ConfigFile, merged); err != nil {
 				return Config{}, false, err
@@ -39,17 +43,22 @@ func EnsureDefault(paths Paths) (Config, bool, error) {
 }
 
 func Load(path string) (Config, error) {
+	cfg, _, err := LoadWithRaw(path)
+	return cfg, err
+}
+
+func LoadWithRaw(path string) (Config, []byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return Config{}, err
+		return Config{}, nil, err
 	}
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return Config{}, fmt.Errorf("parse config: %w", err)
+		return Config{}, data, fmt.Errorf("parse config: %w", err)
 	}
 	cfg.Database.Path = ExpandPath(cfg.Database.Path)
 	cfg.Agent.Workspace = ExpandPath(cfg.Agent.Workspace)
-	return cfg, nil
+	return cfg, data, nil
 }
 
 func Save(path string, cfg Config) error {

@@ -47,6 +47,22 @@ func (s *Service) applyAgentProfile(ctx context.Context, req ChatRequest) ChatRe
 	return req
 }
 
+func (s *Service) profileLanguage(agentID string) string {
+	profile := s.profile(agentID)
+	if strings.TrimSpace(profile.Language) != "" {
+		return profile.Language
+	}
+	return s.cfg.Agent.Language
+}
+
+func (s *Service) profileMaxSteps(agentID string) int {
+	profile := s.profile(agentID)
+	if profile.MaxSteps > 0 {
+		return profile.MaxSteps
+	}
+	return s.maxAgentSteps()
+}
+
 func (s *Service) applyProfilePersona(req ChatRequest, messages []providers.Message) []providers.Message {
 	profile := s.profile(req.AgentID)
 	if strings.TrimSpace(profile.Persona) == "" || len(messages) == 0 || messages[0].Role != "system" {

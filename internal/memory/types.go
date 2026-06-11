@@ -9,6 +9,7 @@ const (
 	KindWorkflow   Kind = "workflow"
 	KindDecision   Kind = "decision"
 	KindConnection Kind = "connection"
+	KindExperience Kind = "experience"
 	KindNote       Kind = "note"
 )
 

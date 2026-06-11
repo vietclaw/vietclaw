@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark-dimmed.css";
+@import "katex/dist/katex.min.css";
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -169,4 +170,15 @@
 .prose hr {
   border-color: #27272a;
   margin: 16px 0;
+}
+
+.prose .katex {
+  color: #e4e4e7;
+  font-size: 1.05em;
+}
+
+.prose .katex-display {
+  margin: 12px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }

@@ -1,6 +1,6 @@
 # VietClaw
 
-VietClaw is a lightweight personal agent runtime. It is not a model. It is a small Go gateway for coordinating model providers, memory, tools, chat channels, and a minimal web UI.
+VietClaw is a lightweight personal **agent framework** built for **prompt-first power**: you chat naturally and the agent handles memory, tools, delegation, and channels — no setup required. Advanced controls (providers, budget, channels, config) stay available when you need them.
 
 Phase 1 built the core daemon foundation: local configuration, SQLite storage, logging, health/status endpoints, and a tiny HTML shell.
 
@@ -149,9 +149,109 @@ go build ./cmd/vietclaw
 
 The final binary serves the embedded UI and does not need Node, pnpm, or npm at runtime.
 
+## Prompt-first design
+
+VietClaw defaults to `agent.experience: "prompt"`:
+
+- **You:** type natural language (Vietnamese or English).
+- **Agent:** auto memory, web search, files, sub-agent delegation, reflexion on errors.
+- **No setup:** providers/memory/tools work out of the box with mock or your configured API keys.
+- **Advanced:** memory UI, providers, budget, channels, `config.json` — hidden until you open **Công cụ nâng cao** in the web UI.
+
+`max_steps` defaults to `0` (unlimited) so long tool chains are not cut mid-task. Set a cap in config only if you want a safety fuse.
+
+## Phase 6 — Agent Framework
+
+VietClaw is now an agent framework, not just a runtime:
+
+| Capability | Description |
+| --- | --- |
+| Multi-agent profiles | Persona, tools, providers, memory scope, max steps per agent |
+| Sub-agent delegation | `agent_delegate` tool spawns child runs with `parent_run_id` trace |
+| Lifecycle hooks | `before_chat`, `after_chat`, `before_tool`, `after_tool`, `run_start`, `run_finish` |
+| Extension registries | Register tools, channel adapters, inspect via `vietclaw framework list` |
+| Profile enforcement | Router and tool list respect per-agent `tools` and `providers` config |
+
+```sh
+go run ./cmd/vietclaw framework list
+curl http://127.0.0.1:18636/api/framework
+```
+
+Example agent profile with constrained tools:
+
+```json
+{
+  "agents": [
+    {
+      "id": "researcher",
+      "name": "Researcher",
+      "persona": "Focus on research. Delegate coding to other agents.",
+      "tools": ["web_search", "web_fetch", "memory_recall", "agent_delegate"],
+      "providers": ["openai"],
+      "max_steps": 8
+    }
+  ],
+  "framework": {
+    "enabled": true,
+    "delegate_enabled": true,
+    "hooks_enabled": true
+  }
+}
+```
+
+## Phase 5 — Research-Backed Agent Upgrades
+
+VietClaw Phase 5 adds capabilities inspired by agent research and OpenClaw-style proactive runtime patterns:
+
+| Feature | Research / reference | What it does |
+| --- | --- | --- |
+| Active memory tools (`memory_recall`, `memory_store`) | MemGPT (arXiv:2310.08560), OpenClaw Active Memory | Agent proactively searches and writes long-term memory during tool loops |
+| Reflexion on tool failure | Reflexion (arXiv:2303.11366) | Failed tool calls are stored as `experience` memories for future runs |
+| Tiered context | MemoryOS (EMNLP 2025) | Session summary (mid-term) + hybrid FTS/vector recall (long-term) + recent messages (short-term) |
+| Heartbeat scheduler | OpenClaw heartbeat polling | Optional periodic proactive checks via `agent.heartbeat` config |
+| Max agent steps | Optional safety fuse | Default `0` (unlimited, prompt-first); set e.g. `12` in config if you want a cap |
+
+Enable heartbeat (proactive agent) in config:
+
+```json
+{
+  "agent": {
+    "heartbeat": {
+      "enabled": true,
+      "interval_seconds": 1800,
+      "prompt": "Heartbeat: check reminders and pending tasks. Reply briefly if needed."
+    }
+  }
+}
+```
+
+Disable reflexion or memory tools if you want a slimmer runtime:
+
+```json
+{
+  "agent": {
+    "reflexion": { "enabled": false },
+    "memory_tools": { "enabled": false }
+  }
+}
+```
+
+## VietClaw vs OpenClaw
+
+| | VietClaw | OpenClaw |
+| --- | --- | --- |
+| Runtime | Single Go binary, ~low RAM | Node/TypeScript + optional Swift |
+| Database | SQLite (no Postgres/Redis) | File-based + plugins |
+| Channels | Discord, Telegram | 20+ platforms via plugins |
+| Harness | Built-in plan/verify/worktree runner | Community plugins |
+| Security default | `shell_exec` off, workspace-scoped files | Requires manual hardening |
+| Proactive agent | Heartbeat scheduler (config) | Heartbeat + Task Brain |
+
+VietClaw wins on deploy simplicity, resource use, and built-in coding harness. OpenClaw wins on channel breadth and plugin marketplace (ClawHub).
+
 ## Next Phases
 
-- Real provider presets and approval flow
-- Better session summaries and memory curation
-- Web UI settings for providers, channels, and memory curation
+- WhatsApp and more channel adapters
+- Plugin install flow (npm/ClawHub-style)
+- Web UI settings for heartbeat, reflexion, and memory tools
 - VietClaw Harness runner UI for plan capsules, evidence ledger, verifier loops, and worktree follow-through

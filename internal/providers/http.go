@@ -51,7 +51,7 @@ func (p *CustomHTTP) Chat(ctx context.Context, req ChatRequest) (ChatResponse, e
 
 func (p *CustomHTTP) EstimateCost(req ChatRequest) CostEstimate {
 	inTokens := EstimateMessagesTokens(req.Messages)
-	outTokens := req.MaxOutputTokens
+	outTokens := OutputTokenBudget(req.MaxOutputTokens)
 	return CostEstimate{
 		InputTokens:      inTokens,
 		OutputTokens:     outTokens,

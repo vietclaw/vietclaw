@@ -7,6 +7,7 @@ import (
 	"vietclaw/internal/agent"
 	"vietclaw/internal/app"
 	"vietclaw/internal/config"
+	"vietclaw/internal/framework"
 )
 
 func handleSettings(application *app.App) http.HandlerFunc {
@@ -62,5 +63,7 @@ func handleSettingsReload(application *app.App) http.HandlerFunc {
 
 func applyConfig(application *app.App, cfg config.Config) {
 	application.Config = cfg
-	application.Agent = agent.NewService(cfg, application.DB).WithLogger(application.Logger)
+	fw := framework.New(cfg.Framework, application.Logger)
+	application.Framework = fw
+	application.Agent = agent.NewService(cfg, application.DB).WithLogger(application.Logger).WithFramework(fw)
 }

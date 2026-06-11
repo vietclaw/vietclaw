@@ -3,8 +3,9 @@ package providers
 import "vietclaw/internal/config"
 
 const (
-	charsPerEstimatedToken = 4
-	defaultMaxOutputTokens = 512
+	charsPerEstimatedToken       = 4
+	unlimitedOutputTokenEstimate = 1024 // conservative budget estimate when no cap is set
+	anthropicUnlimitedCeiling    = 8192 // Anthropic requires max_tokens; use model-typical ceiling
 )
 
 func EstimateMessagesTokens(messages []Message) int {
@@ -27,9 +28,18 @@ func EstimateCostUSD(inTokens, outTokens int, cfg config.ProviderConfig) float64
 	return (float64(inTokens)/1000)*cfg.CostPer1KIn + (float64(outTokens)/1000)*cfg.CostPer1KOut
 }
 
-func defaultOutputTokens(value int) int {
+// OutputTokenBudget returns the configured output cap, or a conservative estimate for cost/budget when unlimited.
+func OutputTokenBudget(value int) int {
 	if value > 0 {
 		return value
 	}
-	return defaultMaxOutputTokens
+	return unlimitedOutputTokenEstimate
+}
+
+// AnthropicMaxOutputTokens returns max_tokens for Anthropic APIs (required param).
+func AnthropicMaxOutputTokens(value int) int64 {
+	if value > 0 {
+		return int64(value)
+	}
+	return int64(anthropicUnlimitedCeiling)
 }

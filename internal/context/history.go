@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"strings"
+
+	"vietclaw/internal/i18n"
 )
 
 func (b *Builder) history(ctx context.Context, sessionID string) string {
@@ -16,7 +18,7 @@ func (b *Builder) history(ctx context.Context, sessionID string) string {
 	}
 	rows, err := b.db.QueryContext(ctx, `
 SELECT role, content FROM messages
-WHERE session_id = ?
+WHERE session_id = ? AND role IN ('user', 'assistant')
 ORDER BY id DESC
 LIMIT ?`, sessionID, limit)
 	if err != nil {
@@ -40,7 +42,8 @@ LIMIT ?`, sessionID, limit)
 	var summary sql.NullString
 	_ = b.db.QueryRowContext(ctx, "SELECT summary FROM sessions WHERE id = ?", sessionID).Scan(&summary)
 	if summary.Valid && summary.String != "" {
-		historyText = "Tóm tắt hội thoại trước đó: " + summary.String + "\n\n" + historyText
+		prefix := i18n.T(b.cfg.Agent.Language, i18n.SystemSummaryPrefix)
+		historyText = prefix + " " + summary.String + "\n\n" + historyText
 	}
 
 	return trimTo(historyText, b.cfg.Agent.MaxContextChars/2)
