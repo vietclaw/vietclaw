@@ -16,3 +16,7 @@ apps/web/dist/
 internal/web/dist/*
 !internal/web/dist/index.html
 scratch/
+open-websearch/node_modules/
+open-websearch/build/
+open-websearch/*.log
+open-websearch/.env*

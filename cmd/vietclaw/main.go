@@ -13,12 +13,13 @@ import (
 )
 
 const (
-	cmdVersion = "version"
-	cmdInit    = "init"
-	cmdSetup   = "setup"
-	cmdDaemon  = "daemon"
-	cmdStatus  = "status"
-	cmdDoctor  = "doctor"
+	cmdVersion   = "version"
+	cmdInit      = "init"
+	cmdSetup     = "setup"
+	cmdDaemon    = "daemon"
+	cmdStatus    = "status"
+	cmdDoctor    = "doctor"
+	cmdWebSearch = "websearch"
 )
 
 var (
@@ -55,6 +56,8 @@ func run(args []string) error {
 		return runStatus()
 	case cmdDoctor:
 		return runDoctor()
+	case cmdWebSearch:
+		return runWebSearch(args[2:])
 	case "help", "-h", "--help":
 		printUsage()
 		return nil
@@ -67,12 +70,13 @@ func printUsage() {
 	fmt.Println(i18n.T(config.DefaultAgentLanguage, i18n.CLIUsage))
 	fmt.Println()
 	fmt.Println("Commands:")
-	fmt.Println("  version   Print version")
-	fmt.Println("  init      Create data dir, config, database")
-	fmt.Println("  setup     Interactive first-time configuration")
-	fmt.Println("  daemon    Start HTTP server and channels")
-	fmt.Println("  status    Query running daemon")
-	fmt.Println("  doctor    Health checks")
+	fmt.Println("  version    Print version")
+	fmt.Println("  init       Create data dir, config, database")
+	fmt.Println("  setup      Interactive first-time configuration")
+	fmt.Println("  daemon     Start HTTP server and channels")
+	fmt.Println("  status     Query running daemon")
+	fmt.Println("  doctor     Health checks")
+	fmt.Println("  websearch  Manage open-websearch integration")
 }
 
 func loadEnvFiles() {
