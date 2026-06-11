@@ -79,7 +79,20 @@ func TestToolNames(t *testing.T) {
 	}
 }
 
-func TestMCPServerConfigRequiresBuild(t *testing.T) {
+func TestMCPServerConfigUsesNpxWithoutLocalBuild(t *testing.T) {
+	cfg, err := MCPServerConfig("", nil)
+	if err != nil {
+		t.Fatalf("MCPServerConfig: %v", err)
+	}
+	if cfg.Command == "" || len(cfg.Args) == 0 {
+		t.Fatalf("expected npx command, got %+v", cfg)
+	}
+	if cfg.Args[len(cfg.Args)-1] != NpmPackage {
+		t.Fatalf("expected package %s in args, got %v", NpmPackage, cfg.Args)
+	}
+}
+
+func TestMCPServerConfigRequiresLocalBuild(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)

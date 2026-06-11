@@ -1,16 +1,9 @@
-// Package websearch integrates the bundled open-websearch MCP sub project
-// (cloned from https://github.com/aas-ee/open-websearch) into VietClaw.
+// Package websearch integrates the open-websearch MCP server
+// (https://github.com/aas-ee/open-websearch) into VietClaw.
 //
-// The sub project lives at <repo>/open-websearch and exposes a Node-based
-// Model Context Protocol server with web search and content fetch tools.
-// This package owns:
-//
-//   - locating the sub project on disk
-//   - building it (npm install + npm run build)
-//   - producing a config.MCPServerConfig that VietClaw's tool registry can
-//     spawn over stdio so its tools (search, fetchWebContent, fetchCsdnArticle,
-//     fetchGithubReadme, fetchJuejinArticle, fetchLinuxDoArticle, ...) become
-//     usable inside VietClaw agents.
+// By default VietClaw launches the published npm package via npx. Developers
+// may still point VIETCLAW_OPEN_WEBSEARCH_DIR at a local checkout for
+// install/build workflows.
 package websearch
 
 import (
@@ -32,9 +25,11 @@ import (
 // names with `mcp_<server_id>_<tool>`.
 const ServerID = "open_websearch"
 
-// SubProjectDirName is the directory name of the bundled sub project inside
-// the VietClaw repository.
+// SubProjectDirName is the conventional directory name for a local checkout.
 const SubProjectDirName = "open-websearch"
+
+// NpmPackage is the default npx package used when no local checkout is found.
+const NpmPackage = "open-websearch@latest"
 
 // EntryRelPath is the relative path of the built Node entrypoint emitted by
 // `npm run build` inside the sub project.
@@ -76,7 +71,7 @@ func (l Locator) Resolve() (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("open-websearch sub project not found; expected %s/ inside the VietClaw checkout or VIETCLAW_OPEN_WEBSEARCH_DIR override", SubProjectDirName)
+	return "", fmt.Errorf("open-websearch local checkout not found; set VIETCLAW_OPEN_WEBSEARCH_DIR or use the default npx package %s", NpmPackage)
 }
 
 func (l Locator) candidates() []string {
@@ -141,6 +136,15 @@ func EnsureNPMAvailable() (string, error) {
 	bin, err := exec.LookPath("npm")
 	if err != nil {
 		return "", errors.New("npm binary not found on PATH; install Node.js / npm to build the open-websearch MCP server")
+	}
+	return bin, nil
+}
+
+// EnsureNPXAvailable returns the resolved npx binary path or an error.
+func EnsureNPXAvailable() (string, error) {
+	bin, err := exec.LookPath("npx")
+	if err != nil {
+		return "", errors.New("npx binary not found on PATH; install Node.js 18+ to use the open-websearch MCP server")
 	}
 	return bin, nil
 }
@@ -213,29 +217,63 @@ func EnsureBuilt(ctx context.Context, subProjectDir string, logTo *os.File) erro
 	return Build(ctx, subProjectDir, logTo)
 }
 
+// Prefetch downloads the published npm package into the npx cache.
+func Prefetch(ctx context.Context, logTo *os.File) error {
+	npx, err := EnsureNPXAvailable()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, DefaultInstallTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, npx, "-y", NpmPackage, "--help")
+	cmd.Env = os.Environ()
+	if logTo != nil {
+		cmd.Stdout = logTo
+		cmd.Stderr = logTo
+	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("npx prefetch failed for %s: %w", NpmPackage, err)
+	}
+	return nil
+}
+
 // MCPServerConfig produces the config.MCPServerConfig entry that VietClaw's
-// MCP client will spawn over stdio. The sub project's `node build/index.js`
-// entrypoint speaks MCP on stdin/stdout when MODE=stdio is set, and exposes
-// search + fetch tools registered in src/tools/setupTools.ts.
+// MCP client will spawn over stdio. Uses a local checkout when built; otherwise
+// launches the published package via npx.
 func MCPServerConfig(subProjectDir string, env map[string]string) (config.MCPServerConfig, error) {
-	node, err := EnsureNodeAvailable()
-	if err != nil {
-		return config.MCPServerConfig{}, err
-	}
-	entry, err := EntryPath(subProjectDir)
-	if err != nil {
-		return config.MCPServerConfig{}, err
-	}
 	mergedEnv := defaultEnv()
 	for k, v := range env {
 		mergedEnv[k] = v
+	}
+	if subProjectDir != "" {
+		node, err := EnsureNodeAvailable()
+		if err != nil {
+			return config.MCPServerConfig{}, err
+		}
+		entry, err := EntryPath(subProjectDir)
+		if err != nil {
+			return config.MCPServerConfig{}, err
+		}
+		return config.MCPServerConfig{
+			ID:             ServerID,
+			Enabled:        true,
+			Transport:      "stdio",
+			Command:        node,
+			Args:           []string{entry},
+			Env:            mergedEnv,
+			TimeoutSeconds: DefaultMCPTimeoutSeconds,
+		}, nil
+	}
+	npx, err := EnsureNPXAvailable()
+	if err != nil {
+		return config.MCPServerConfig{}, err
 	}
 	return config.MCPServerConfig{
 		ID:             ServerID,
 		Enabled:        true,
 		Transport:      "stdio",
-		Command:        node,
-		Args:           []string{entry},
+		Command:        npx,
+		Args:           []string{"-y", NpmPackage},
 		Env:            mergedEnv,
 		TimeoutSeconds: DefaultMCPTimeoutSeconds,
 	}, nil

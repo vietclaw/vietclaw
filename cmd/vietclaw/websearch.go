@@ -13,11 +13,8 @@ import (
 	"vietclaw/internal/websearch"
 )
 
-// runWebSearch dispatches `vietclaw websearch ...` subcommands. The
-// open-websearch sub project lives at <repo>/open-websearch and exposes web
-// search + content fetch tools over the Model Context Protocol. These
-// commands manage installing / building / enabling / probing that MCP server
-// inside VietClaw's config.
+// runWebSearch dispatches `vietclaw websearch ...` subcommands for the
+// open-websearch MCP integration (npm package or optional local checkout).
 func runWebSearch(args []string) error {
 	if len(args) == 0 {
 		return websearchUsage()
@@ -51,66 +48,76 @@ func runWebSearch(args []string) error {
 func websearchUsage() error {
 	fmt.Println(`vietclaw websearch <command>
 
-Manage the bundled open-websearch MCP sub project at ./open-websearch.
+Manage the open-websearch MCP integration (npx package or local checkout).
 
 Commands:
-  install   Run "npm install" inside the sub project.
-  build     Run "npm run build" inside the sub project.
-  enable    Build (if needed) and register the MCP server in config.json.
+  install   Install local checkout deps, or prefetch the npm package via npx.
+  build     Build a local checkout, or prefetch the npm package via npx.
+  enable    Register the MCP server in config.json.
   disable   Mark the MCP server entry disabled (entry stays in config).
   remove    Delete the MCP server entry from config.json.
-  status    Print sub project + MCP server status.
-  path      Print the resolved sub project directory.
+  status    Print package + MCP server status.
+  path      Print the resolved local checkout path, if any.
   tools     List the MCP tools exposed by open-websearch.
   test      Spawn the server and discover its tools live.`)
 	return nil
 }
 
-func resolveSubProject() (string, error) {
+func optionalLocalDir() string {
 	paths, _, err := loadOrCreateConfig()
 	if err != nil {
-		return "", err
+		return ""
 	}
-	locator := websearch.NewLocator(paths.DataDir)
-	dir, err := locator.Resolve()
+	dir, err := websearch.NewLocator(paths.DataDir).Resolve()
 	if err != nil {
-		return "", err
+		return ""
 	}
-	return dir, nil
+	return dir
 }
 
 func runWebSearchPath() error {
-	dir, err := resolveSubProject()
-	if err != nil {
-		return err
+	dir := optionalLocalDir()
+	if dir == "" {
+		fmt.Println(websearch.NpmPackage)
+		return nil
 	}
 	fmt.Println(dir)
 	return nil
 }
 
 func runWebSearchInstall() error {
-	dir, err := resolveSubProject()
-	if err != nil {
+	dir := optionalLocalDir()
+	if dir != "" {
+		fmt.Printf("[websearch] npm install in %s\n", dir)
+		if err := websearch.Install(context.Background(), dir, os.Stderr); err != nil {
+			return err
+		}
+		fmt.Println("[ok] open-websearch dependencies installed")
+		return nil
+	}
+	fmt.Printf("[websearch] prefetching %s via npx\n", websearch.NpmPackage)
+	if err := websearch.Prefetch(context.Background(), os.Stderr); err != nil {
 		return err
 	}
-	fmt.Printf("[websearch] npm install in %s\n", dir)
-	if err := websearch.Install(context.Background(), dir, os.Stderr); err != nil {
-		return err
-	}
-	fmt.Println("[ok] open-websearch dependencies installed")
+	fmt.Println("[ok] open-websearch npm package prefetched")
 	return nil
 }
 
 func runWebSearchBuild() error {
-	dir, err := resolveSubProject()
-	if err != nil {
+	dir := optionalLocalDir()
+	if dir != "" {
+		fmt.Printf("[websearch] npm run build in %s\n", dir)
+		if err := websearch.EnsureBuilt(context.Background(), dir, os.Stderr); err != nil {
+			return err
+		}
+		fmt.Println("[ok] open-websearch built")
+		return nil
+	}
+	fmt.Printf("[websearch] prefetching %s via npx\n", websearch.NpmPackage)
+	if err := websearch.Prefetch(context.Background(), os.Stderr); err != nil {
 		return err
 	}
-	fmt.Printf("[websearch] npm run build in %s\n", dir)
-	if err := websearch.EnsureBuilt(context.Background(), dir, os.Stderr); err != nil {
-		return err
-	}
-	fmt.Println("[ok] open-websearch built")
+	fmt.Println("[ok] open-websearch npm package prefetched")
 	return nil
 }
 
@@ -119,13 +126,15 @@ func runWebSearchEnable() error {
 	if err != nil {
 		return err
 	}
-	dir, err := websearch.NewLocator(paths.DataDir).Resolve()
-	if err != nil {
-		return err
-	}
-	fmt.Printf("[websearch] ensuring build in %s\n", dir)
-	if err := websearch.EnsureBuilt(context.Background(), dir, os.Stderr); err != nil {
-		return err
+	dir := ""
+	if d, locErr := websearch.NewLocator(paths.DataDir).Resolve(); locErr == nil {
+		dir = d
+		fmt.Printf("[websearch] ensuring build in %s\n", dir)
+		if err := websearch.EnsureBuilt(context.Background(), dir, os.Stderr); err != nil {
+			return err
+		}
+	} else {
+		fmt.Printf("[websearch] using npm package %s\n", websearch.NpmPackage)
 	}
 	server, err := websearch.MCPServerConfig(dir, nil)
 	if err != nil {
@@ -175,12 +184,13 @@ func runWebSearchStatus() error {
 		return err
 	}
 	dir, locErr := websearch.NewLocator(paths.DataDir).Resolve()
-	fmt.Println("Open-WebSearch sub project")
+	fmt.Println("Open-WebSearch")
 	fmt.Println(strings.Repeat("-", 32))
 	if locErr != nil {
-		fmt.Printf("location: not found (%v)\n", locErr)
+		fmt.Printf("package:  %s (via npx)\n", websearch.NpmPackage)
+		fmt.Printf("local:    not found (%v)\n", locErr)
 	} else {
-		fmt.Printf("location: %s\n", dir)
+		fmt.Printf("local:    %s\n", dir)
 		fmt.Printf("built:    %t (%s)\n", websearch.IsBuilt(dir), websearch.EntryRelPath)
 	}
 	fmt.Println()
@@ -212,12 +222,12 @@ func runWebSearchTest(args []string) error {
 	if err != nil {
 		return err
 	}
-	dir, err := websearch.NewLocator(paths.DataDir).Resolve()
-	if err != nil {
-		return err
-	}
-	if err := websearch.EnsureBuilt(context.Background(), dir, os.Stderr); err != nil {
-		return err
+	dir := ""
+	if d, locErr := websearch.NewLocator(paths.DataDir).Resolve(); locErr == nil {
+		dir = d
+		if err := websearch.EnsureBuilt(context.Background(), dir, os.Stderr); err != nil {
+			return err
+		}
 	}
 	server, err := websearch.MCPServerConfig(dir, nil)
 	if err != nil {
