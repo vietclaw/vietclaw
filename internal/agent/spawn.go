@@ -14,7 +14,7 @@ import (
 	"vietclaw/internal/tools"
 )
 
-type spawnNotifier func(agentID, status, summary string)
+type spawnNotifier func(agentID, status, summary, childSessionID, parentSessionID string)
 
 func (s *Service) handleFrameworkTool(ctx context.Context, parentReq ChatRequest, parentRunID, toolName, argsJSON string, notify spawnNotifier) (string, error) {
 	switch strings.TrimSpace(toolName) {
@@ -58,6 +58,9 @@ func (s *Service) handleAgentSpawn(ctx context.Context, parentReq ChatRequest, p
 		modelHint = s.agentModelHint(agentID)
 	}
 
+	spawnPrefix, childSessionID := buildChildSessionIDs(parentReq.SessionID, agentID)
+	parentSessionID := parentReq.SessionID
+
 	run := func() (ChatResponse, error) {
 		if err := s.pool.Acquire(ctx, parentRunID); err != nil {
 			return ChatResponse{}, err
@@ -66,7 +69,7 @@ func (s *Service) handleAgentSpawn(ctx context.Context, parentReq ChatRequest, p
 		childReq := parentReq
 		childReq.AgentID = agentID
 		childReq.Message = message
-		childReq.SessionID = parentReq.SessionID + ":spawn:" + agentID + ":" + newID("sub")
+		childReq.SessionID = spawnPrefix
 		if providerID, modelID := s.resolveChildModel(parentReq, modelHint); providerID != "" {
 			childReq.Provider = providerID
 			childReq.Model = modelID
@@ -74,35 +77,31 @@ func (s *Service) handleAgentSpawn(ctx context.Context, parentReq ChatRequest, p
 		return s.Delegate(ctx, childReq, parentRunID, agentID, message)
 	}
 
-	if wait {
+	emit := func(status, summary string) {
 		if notify != nil {
-			notify(agentID, "running", message)
+			notify(agentID, status, summary, childSessionID, parentSessionID)
 		}
+	}
+
+	if wait {
+		emit("running", message)
 		resp, err := run()
 		if err != nil {
-			if notify != nil {
-				notify(agentID, "failed", err.Error())
-			}
+			emit("failed", err.Error())
 			return "", err
 		}
-		if notify != nil {
-			notify(agentID, "done", resp.Reply)
-		}
+		emit("done", resp.Reply)
 		return fmt.Sprintf("Spawned %s: %s", agentID, resp.Reply), nil
 	}
 
 	go func() {
-		if notify != nil {
-			notify(agentID, "running", message)
-		}
+		emit("running", message)
 		resp, err := run()
-		if notify != nil {
-			if err != nil {
-				notify(agentID, "failed", err.Error())
-				return
-			}
-			notify(agentID, "done", resp.Reply)
+		if err != nil {
+			emit("failed", err.Error())
+			return
 		}
+		emit("done", resp.Reply)
 		_ = resp
 	}()
 	return fmt.Sprintf("Spawned %s asynchronously", agentID), nil

@@ -20,6 +20,13 @@ import katex from 'katex'
 import { marked } from 'marked'
 import type { ChatItem, ChatStepEvent } from '~/composables/useChat'
 import { enhanceCodeBlocks } from '~/utils/enhanceCodeBlocks'
+import {
+  isAgentSpawnTool,
+  isToolResultFailure,
+  spawnAgentIdFromInput,
+  stripSpawnResultPrefix,
+  toolFailureMessage,
+} from '~/utils/toolDisplay'
 
 const {
   currentSession,
@@ -31,8 +38,10 @@ const {
   clearSessionMessages,
   stopGeneration,
   setSelectedCatalog,
+  sessionPath,
 } = useChat()
 const { t, toolLabel } = useI18n()
+const { config, load: loadSettings } = useSettings()
 const toast = useToast()
 
 const chatInput = ref('')
@@ -60,19 +69,28 @@ function onDocumentClick(event: MouseEvent) {
   modelMenuOpen.value = false
 }
 
-onMounted(() => document.addEventListener('click', onDocumentClick))
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+  if (!config.value) void loadSettings()
+})
 onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
 const SCROLL_STICK_THRESHOLD = 96
 
-const suggestions = computed(() => [
-  { label: t('chat.suggestion.remember.label'), text: t('chat.suggestion.remember.text') },
-  { label: t('chat.suggestion.search.label'), text: t('chat.suggestion.search.text') },
-  { label: t('chat.suggestion.spawn.label'), text: t('chat.suggestion.spawn.text') },
-  { label: t('chat.suggestion.createAgent.label'), text: t('chat.suggestion.createAgent.text') },
-  { label: t('chat.suggestion.delegate.label'), text: t('chat.suggestion.delegate.text') },
-  { label: t('chat.suggestion.workspace.label'), text: t('chat.suggestion.workspace.text') },
-])
+const suggestions = computed(() => {
+  const items = [
+    { id: 'remember', label: t('chat.suggestion.remember.label'), text: t('chat.suggestion.remember.text') },
+    { id: 'search', label: t('chat.suggestion.search.label'), text: t('chat.suggestion.search.text') },
+    { id: 'spawn', label: t('chat.suggestion.spawn.label'), text: t('chat.suggestion.spawn.text') },
+    { id: 'createAgent', label: t('chat.suggestion.createAgent.label'), text: t('chat.suggestion.createAgent.text') },
+    { id: 'delegate', label: t('chat.suggestion.delegate.label'), text: t('chat.suggestion.delegate.text') },
+    { id: 'workspace', label: t('chat.suggestion.workspace.label'), text: t('chat.suggestion.workspace.text') },
+  ]
+  if (!config.value?.framework?.allow_auto_create) {
+    return items.filter(item => item.id !== 'createAgent')
+  }
+  return items
+})
 
 const SUMMARY_KEYS = ['query', 'command', 'cmd', 'path', 'file', 'url', 'name', 'input', 'text', 'pattern', 'expression', 'message', 'prompt', 'agent_id']
 
@@ -90,6 +108,41 @@ function truncate(text: string, max = 72): string {
   const t = text.trim()
   if (t.length <= max) return t
   return `${t.slice(0, max)}…`
+}
+
+function isToolFailed(group: ToolGroup): boolean {
+  if (group.error) return true
+  return isToolResultFailure(group.result)
+}
+
+function toolDisplayLabel(group: ToolGroup): string {
+  if (!isAgentSpawnTool(group.toolName)) {
+    return toolLabel(group.toolName, isToolFailed(group))
+  }
+  if (isToolFailed(group)) {
+    return toolLabel(group.toolName, true)
+  }
+  const agentId = spawnAgentIdFromInput(group.input)
+  if (group.result?.trim()) {
+    return agentId ? t('tool.ui.agent_result', agentId) : t('tool.ui.agent_result_generic')
+  }
+  return agentId ? t('tool.ui.agent_spawning', agentId) : toolLabel(group.toolName, false)
+}
+
+function dedupeSpawnBlocks(blocks: RenderBlock[]): RenderBlock[] {
+  const completedAgents = new Set<string>()
+  for (const block of blocks) {
+    if (block.type !== 'tool' || !isAgentSpawnTool(block.group.toolName)) continue
+    if (!block.group.result || isToolFailed(block.group)) continue
+    const agentId = spawnAgentIdFromInput(block.group.input)
+    if (agentId) completedAgents.add(agentId)
+  }
+  if (completedAgents.size === 0) return blocks
+  return blocks.filter(block => {
+    if (block.type !== 'spawn') return true
+    if (block.spawn.status !== 'done') return true
+    return !completedAgents.has(block.spawn.agentId)
+  })
 }
 
 function toolRequestSummary(input?: string): string {
@@ -114,6 +167,7 @@ type SpawnGroup = {
   agentId: string
   status: string
   summary?: string
+  childSessionId?: string
 }
 
 type RenderBlock =
@@ -131,6 +185,7 @@ function upsertSpawnBlock(blocks: RenderBlock[], step: ChatStepEvent, index: num
     agentId,
     status: step.spawnStatus ?? 'running',
     summary: step.spawnSummary,
+    childSessionId: step.childSessionId,
   }
   if (existing >= 0) {
     const prev = blocks[existing]
@@ -227,7 +282,7 @@ function buildRenderBlocks(msg: ChatItem): RenderBlock[] {
     const blocks: RenderBlock[] = []
     if (msg.text.trim()) blocks.push({ type: 'text', text: msg.text })
     for (const group of toolGroups) blocks.push({ type: 'tool', group })
-    return blocks
+    return dedupeSpawnBlocks(blocks)
   }
 
   const blocks: RenderBlock[] = []
@@ -266,7 +321,7 @@ function buildRenderBlocks(msg: ChatItem): RenderBlock[] {
       })
     }
   }
-  return blocks
+  return dedupeSpawnBlocks(blocks)
 }
 
 function toolIcon(name: string) {
@@ -382,6 +437,7 @@ async function copyMessage(text: string) {
 
 const session = computed(() => currentSession())
 const messages = computed(() => session.value?.messages || [])
+const isReadOnly = computed(() => session.value?.readOnly === true)
 
 function isStreamingMessage(idx: number) {
   return isGenerating.value
@@ -413,7 +469,14 @@ watch(currentSessionId, () => {
   <div class="flex h-full min-h-0 flex-col">
     <div ref="chatBox" class="min-h-0 flex-1 overflow-y-auto vc-scrollbar" @scroll="onChatScroll">
       <div
-        v-if="messages.length === 0"
+        v-if="messages.length === 0 && isReadOnly"
+        class="mx-auto flex h-full max-w-2xl flex-col justify-center px-5 pb-16 md:px-8"
+      >
+        <p class="text-sm text-vc-text-muted">{{ t('nav.subAgentEmpty') }}</p>
+      </div>
+
+      <div
+        v-else-if="messages.length === 0"
         class="mx-auto flex h-full max-w-2xl flex-col justify-center px-5 pb-16 md:px-8"
       >
         <p class="vc-display vc-fade-up text-3xl font-medium text-vc-text md:text-4xl" style="text-wrap: balance">
@@ -480,7 +543,14 @@ watch(currentSessionId, () => {
                   <Users :size="14" class="mt-0.5 shrink-0" :stroke-width="1.75" />
                   <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-1.5">
-                      <span class="font-medium text-vc-text-secondary">{{ block.spawn.agentId }}</span>
+                      <NuxtLink
+                        v-if="block.spawn.childSessionId"
+                        :to="sessionPath(block.spawn.childSessionId)"
+                        class="font-medium text-vc-text-secondary transition-colors hover:text-vc-accent"
+                      >
+                        {{ block.spawn.agentId }}
+                      </NuxtLink>
+                      <span v-else class="font-medium text-vc-text-secondary">{{ block.spawn.agentId }}</span>
                       <span class="text-xs" :class="spawnStatusClass(block.spawn.status)">
                         {{ spawnStatusLabel(block.spawn.status) }}
                       </span>
@@ -497,9 +567,9 @@ watch(currentSessionId, () => {
                   <AlertCircle :size="14" class="shrink-0" :stroke-width="1.75" />
                   <span>{{ block.group.error }}</span>
                 </div>
-                <div v-else class="flex items-start gap-2 text-vc-text-muted">
+                <div v-else class="flex items-start gap-2" :class="isToolFailed(block.group) ? 'text-vc-error' : 'text-vc-text-muted'">
                   <component
-                    :is="toolIcon(block.group.toolName)"
+                    :is="isToolFailed(block.group) ? AlertCircle : toolIcon(block.group.toolName)"
                     :size="14"
                     class="mt-0.5 shrink-0"
                     :stroke-width="1.75"
@@ -510,11 +580,21 @@ watch(currentSessionId, () => {
                       class="group flex max-w-full items-center gap-1.5 text-left transition-colors hover:text-vc-text-secondary"
                       @click="toggleToolExpand(idx, block.group.id)"
                     >
-                      <span class="shrink-0 font-medium text-vc-text-secondary group-hover:text-vc-text">
-                        {{ toolLabel(block.group.toolName) }}
+                      <span
+                        class="shrink-0 font-medium group-hover:text-vc-text"
+                        :class="isToolFailed(block.group) ? 'text-vc-error' : 'text-vc-text-secondary'"
+                      >
+                        {{ toolDisplayLabel(block.group) }}
                       </span>
-                      <template v-if="toolRequestSummary(block.group.input)">
-                        <span class="truncate text-vc-text-muted">- {{ toolRequestSummary(block.group.input) }}</span>
+                      <template v-if="!block.group.result && toolRequestSummary(block.group.input)">
+                        <span class="truncate" :class="isToolFailed(block.group) ? 'text-vc-error/80' : 'text-vc-text-muted'">
+                          - {{ toolRequestSummary(block.group.input) }}
+                        </span>
+                      </template>
+                      <template v-else-if="block.group.result && isAgentSpawnTool(block.group.toolName) && !isToolFailed(block.group)">
+                        <span class="truncate text-vc-text-muted">
+                          - {{ truncate(stripSpawnResultPrefix(block.group.result), 72) }}
+                        </span>
                       </template>
                       <ChevronDown
                         :size="14"
@@ -523,6 +603,12 @@ watch(currentSessionId, () => {
                         :stroke-width="1.75"
                       />
                     </button>
+                    <p
+                      v-if="isToolFailed(block.group) && toolFailureMessage(block.group.result)"
+                      class="mt-1 text-xs leading-relaxed text-vc-error"
+                    >
+                      {{ truncate(toolFailureMessage(block.group.result), 200) }}
+                    </p>
                     <div
                       v-if="isToolExpanded(idx, block.group.id)"
                       class="mt-2 space-y-3 border-l-2 border-vc-accent/30 pl-3"
@@ -561,7 +647,7 @@ watch(currentSessionId, () => {
       </div>
     </div>
 
-    <div class="shrink-0 px-4 pb-4 pt-2 md:px-8 md:pb-6">
+    <div v-if="!isReadOnly" class="shrink-0 px-4 pb-4 pt-2 md:px-8 md:pb-6">
       <div class="mx-auto max-w-2xl">
         <div class="vc-composer flex items-end gap-1 py-2 pl-4 pr-2">
           <textarea

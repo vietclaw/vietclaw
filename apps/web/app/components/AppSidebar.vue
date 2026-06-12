@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ArrowLeft, Plus, Trash2, X } from '@lucide/vue'
+import { ArrowLeft, Plus, X } from '@lucide/vue'
 import { sessionPath } from '~/composables/useChat'
 import { SETTINGS_NAV, isSettingsNavActive } from '~/utils/settingsNav'
 
 defineProps<{ open: boolean }>()
 defineEmits<{ close: [] }>()
 
-const { sessions, createSession, deleteSession } = useChat()
+const { sessions, createSession } = useChat()
 const route = useRoute()
 const { online } = useDaemon()
 const { t } = useI18n()
@@ -15,7 +15,7 @@ const isSettings = computed(() => route.path.startsWith('/settings'))
 
 const activeSessionId = computed(() => {
   if (route.path.startsWith('/p/')) {
-    return String(route.params.id)
+    return decodeURIComponent(String(route.params.id))
   }
   return ''
 })
@@ -105,38 +105,7 @@ async function startNewSession() {
           </button>
         </div>
         <p class="vc-eyebrow px-3 pb-2 pt-1">{{ t('nav.conversations') }}</p>
-        <div class="space-y-0.5 py-1">
-          <div
-            v-for="session in sessions"
-            :key="session.id"
-            class="group relative flex items-center gap-1 rounded-lg transition-colors duration-200"
-            :class="session.id === activeSessionId ? 'bg-vc-bg-subtle' : 'hover:bg-vc-bg-subtle/60'"
-          >
-            <span
-              v-if="session.id === activeSessionId"
-              class="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-vc-accent"
-              aria-hidden="true"
-            />
-            <NuxtLink
-              :to="sessionPath(session.id)"
-              class="min-w-0 flex-1 truncate px-3 py-2 text-left text-sm transition-colors duration-200"
-              :class="session.id === activeSessionId
-                ? 'font-medium text-vc-text'
-                : 'text-vc-text-secondary group-hover:text-vc-text'"
-            >
-              {{ session.title }}
-            </NuxtLink>
-            <button
-              v-if="sessions.length > 1"
-              type="button"
-              class="vc-btn-ghost mr-1 rounded-full p-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-visible:opacity-100"
-              :aria-label="`Xóa ${session.title}`"
-              @click.stop="deleteSession(session.id)"
-            >
-              <Trash2 :size="13" :stroke-width="1.5" />
-            </button>
-          </div>
-        </div>
+        <SidebarSessionTree />
       </template>
     </div>
 

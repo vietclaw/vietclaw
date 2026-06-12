@@ -26,6 +26,10 @@ func (s *Service) Delegate(ctx context.Context, parentReq ChatRequest, parentRun
 	if err := s.insertRun(ctx, runID, childReq.SessionID, parentRunID, string(intent), "", "", RunStatusRunning, ""); err != nil {
 		return ChatResponse{}, err
 	}
+	s.publishSessionEvent(childReq.SessionID, SessionEvent{
+		Event:  "run_status",
+		Status: RunStatusRunning,
+	})
 
 	if s.framework != nil && s.framework.Hooks != nil {
 		_ = s.framework.Hooks.Emit(ctx, framework.EventRunStart, framework.HookContext{

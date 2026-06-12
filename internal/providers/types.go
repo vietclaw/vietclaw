@@ -72,9 +72,10 @@ type ChatResponse struct {
 }
 
 type StreamChunk struct {
-	Event      string     `json:"event,omitempty"`
-	SessionID  string     `json:"session_id,omitempty"`
-	Text       string     `json:"text"`
+	Event           string     `json:"event,omitempty"`
+	SessionID       string     `json:"session_id,omitempty"`
+	ParentSessionID string     `json:"parent_session_id,omitempty"`
+	Text            string     `json:"text"`
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 	ToolName   string     `json:"tool_name,omitempty"`
 	ToolInput  string     `json:"tool_input,omitempty"`

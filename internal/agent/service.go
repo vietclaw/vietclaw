@@ -24,6 +24,7 @@ type Service struct {
 	tools     *tools.ToolRegistry
 	agents    *agentfs.Registry
 	pool      *RunPool
+	runEvents *RunEventHub
 	framework *framework.Framework
 	Logger    *log.Logger
 	dataDir   string
@@ -55,9 +56,25 @@ func NewServiceWithDataDir(cfg config.Config, db *sql.DB, dataDir string) *Servi
 		context: contextbuilder.New(cfg, db, mem).WithRouter(r).WithAgentRegistry(registry),
 		tools:   toolReg,
 		agents:  registry,
-		pool:    NewRunPool(cfg.Runtime.MaxConcurrentTasks, cfg.Framework.MaxConcurrentSpawns),
-		dataDir: dataDir,
+		pool:      NewRunPool(cfg.Runtime.MaxConcurrentTasks, cfg.Framework.MaxConcurrentSpawns),
+		runEvents: NewRunEventHub(),
+		dataDir:   dataDir,
 	}
+}
+
+func (s *Service) SubscribeSession(sessionID string) (<-chan SessionEvent, func()) {
+	if s.runEvents == nil {
+		ch := make(chan SessionEvent)
+		return ch, func() { close(ch) }
+	}
+	return s.runEvents.Subscribe(sessionID)
+}
+
+func (s *Service) publishSessionEvent(sessionID string, ev SessionEvent) {
+	if s.runEvents == nil || sessionID == "" {
+		return
+	}
+	s.runEvents.Publish(sessionID, ev)
 }
 
 func (s *Service) WithLogger(logger *log.Logger) *Service {

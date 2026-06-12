@@ -18,13 +18,16 @@ func IsFrameworkTool(name string) bool {
 	}
 }
 
-func FrameworkToolDefinitions() []providers.ToolDefinition {
-	return []providers.ToolDefinition{
+func FrameworkToolDefinitions(allowAutoCreate bool) []providers.ToolDefinition {
+	defs := []providers.ToolDefinition{
 		AgentDelegateDefinition(),
 		AgentSpawnDefinition(),
 		AgentSpawnBatchDefinition(),
-		AgentCreateDefinition(),
 	}
+	if allowAutoCreate {
+		defs = append(defs, AgentCreateDefinition())
+	}
+	return defs
 }
 
 func AgentDelegateDefinition() providers.ToolDefinition {
@@ -70,7 +73,7 @@ func AgentSpawnBatchDefinition() providers.ToolDefinition {
 		Type: "function",
 		Function: providers.FunctionDetail{
 			Name:        ToolAgentSpawnBatch,
-			Description: "Spawn multiple child agents in parallel and collect their results.",
+			Description: "Spawn multiple child agents in parallel and collect their results. Each task must use an agent_id whose specialty matches the message — do not assign research tasks to code-review agents or review tasks to research agents.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -115,7 +118,7 @@ func AgentCreateDefinition() providers.ToolDefinition {
 		Type: "function",
 		Function: providers.FunctionDetail{
 			Name:        ToolAgentCreate,
-			Description: "Create a new specialized agent directory with AGENT.md, skills, and tool guides.",
+			Description: "Create a new specialized agent directory with AGENT.md, skills, and tool guides. Only available when allow_auto_create is enabled in settings.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{

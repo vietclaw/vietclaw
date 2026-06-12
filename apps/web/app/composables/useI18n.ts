@@ -27,12 +27,17 @@ export function useI18n() {
     return label ?? value
   }
 
-  function toolLabel(toolName: string): string {
+  function toolLabel(toolName: string, failed = false): string {
     const base = toolName.split(':')[0] ?? toolName
     const normalized = normalizeToolName(base)
-    const key = `tool.ui.${normalized}`
+    const key = failed ? `tool.ui.${normalized}_failed` : `tool.ui.${normalized}`
     const label = catalogs[lang.value]?.[key] ?? catalogs.vi[key]
-    return label ?? toolName
+    if (label) return label
+    if (failed) {
+      const fallback = catalogs[lang.value]?.[`tool.ui.${normalized}`] ?? catalogs.vi[`tool.ui.${normalized}`]
+      if (fallback) return fallback
+    }
+    return toolName
   }
 
   function channelStatus(channel: { running?: boolean; enabled?: boolean } | undefined): string {

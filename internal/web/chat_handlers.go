@@ -85,9 +85,11 @@ func handleAPIChatStream(application *app.App) http.HandlerFunc {
 				flusher.Flush()
 			case "spawn":
 				writeSSEJSON(w, "spawn", map[string]string{
-					"agent_id": chunk.ToolName,
-					"status":   chunk.ToolInput,
-					"summary":  chunk.ToolResult,
+					"agent_id":          chunk.ToolName,
+					"status":            chunk.ToolInput,
+					"summary":           chunk.ToolResult,
+					"child_session_id":  chunk.SessionID,
+					"parent_session_id": chunk.ParentSessionID,
 				})
 				flusher.Flush()
 			default:

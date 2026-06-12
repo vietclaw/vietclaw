@@ -63,7 +63,31 @@ type Message struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type ToolEvent struct {
+	ID        int64  `json:"id"`
+	SessionID string `json:"session_id"`
+	ToolName  string `json:"tool_name"`
+	Input     string `json:"input"`
+	Output    string `json:"output"`
+	OK        bool   `json:"ok"`
+	Error     string `json:"error,omitempty"`
+	CreatedAt string `json:"created_at"`
+}
+
 type SessionDetail struct {
-	Session  Session   `json:"session"`
-	Messages []Message `json:"messages"`
+	Session    Session     `json:"session"`
+	Messages   []Message   `json:"messages"`
+	ToolEvents []ToolEvent `json:"tool_events"`
+	RunStatus  string      `json:"run_status,omitempty"`
+	RunSummary string      `json:"run_summary,omitempty"`
+}
+
+type ChildSession struct {
+	ID          string `json:"id"`
+	AgentID     string `json:"agent_id"`
+	TaskPreview string `json:"task_preview"`
+	RunStatus   string `json:"run_status"`
+	HasReply    bool   `json:"has_reply"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }

@@ -9,6 +9,10 @@ withDefaults(
 )
 
 const model = defineModel<boolean>({ default: false })
+
+function onInputFocus(event: FocusEvent) {
+  ;(event.target as HTMLInputElement | null)?.blur()
+}
 </script>
 
 <template>
@@ -20,7 +24,9 @@ const model = defineModel<boolean>({ default: false })
       v-model="model"
       type="checkbox"
       class="vc-toggle-input"
+      tabindex="-1"
       :disabled="disabled"
+      @focus="onInputFocus"
     />
     <span class="vc-toggle-track" aria-hidden="true">
       <span class="vc-toggle-thumb" />

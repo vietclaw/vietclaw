@@ -140,7 +140,7 @@ export function parseToolInputDisplay(toolName: string, raw?: string): ToolDispl
   return { mode: 'raw', text: formatToolJson(raw) }
 }
 
-function parseToolFailure(raw: string): { error: string, output?: string } | null {
+export function parseToolFailure(raw: string): { error: string, output?: string } | null {
   for (const marker of TOOL_OUTPUT_MARKERS) {
     const idx = raw.indexOf(marker)
     if (idx === -1) continue
@@ -158,6 +158,38 @@ function parseToolFailure(raw: string): { error: string, output?: string } | nul
   return null
 }
 
+export function isToolResultFailure(raw?: string): boolean {
+  if (!raw?.trim()) return false
+  return parseToolFailure(raw) !== null
+}
+
+export function toolFailureMessage(raw?: string): string {
+  if (!raw?.trim()) return ''
+  const failure = parseToolFailure(raw)
+  return failure?.error ?? ''
+}
+
+const AGENT_SPAWN_TOOLS = new Set(['agent_spawn', 'agent_delegate', 'agent_spawn_batch'])
+
+export function isAgentSpawnTool(toolName: string): boolean {
+  const base = toolName.split(':')[0] ?? toolName
+  return AGENT_SPAWN_TOOLS.has(normalizeToolName(base))
+}
+
+export function spawnAgentIdFromInput(input?: string): string {
+  if (!input?.trim()) return ''
+  const obj = tryParseJson(input.trim())
+  if (!obj) return ''
+  return pickString(obj, ['agent_id']) ?? ''
+}
+
+export function stripSpawnResultPrefix(raw: string): string {
+  const trimmed = raw.trim()
+  const single = trimmed.match(/^Spawned\s+([^\s:]+):\s*([\s\S]*)$/i)
+  if (single?.[2]) return single[2].trim()
+  return trimmed
+}
+
 export function parseToolResultDisplay(
   toolName: string,
   raw?: string,
@@ -165,18 +197,22 @@ export function parseToolResultDisplay(
 ): ToolDisplayView {
   if (!raw?.trim()) return { mode: 'empty' }
   const name = normalizeToolName(toolName)
+  let displayRaw = raw
+  if (isAgentSpawnTool(toolName)) {
+    displayRaw = stripSpawnResultPrefix(raw)
+  }
 
   const failure = parseToolFailure(raw)
   if (failure) {
     return { mode: 'failure', error: failure.error, output: failure.output }
   }
 
-  if (isTrivialResult(raw) && (name.includes('file_write') || name.includes('write'))) {
+  if (isTrivialResult(displayRaw) && (name.includes('file_write') || name.includes('write'))) {
     return { mode: 'empty' }
   }
 
-  if ((name.includes('shell') || name.includes('exec')) && raw.includes('\n')) {
-    return { mode: 'failure', error: '', output: raw.trim() }
+  if ((name.includes('shell') || name.includes('exec')) && displayRaw.includes('\n')) {
+    return { mode: 'failure', error: '', output: displayRaw.trim() }
   }
 
   let path: string | undefined
@@ -185,7 +221,7 @@ export function parseToolResultDisplay(
     path = pickString(inputObj, ['path', 'file', 'filepath', 'filename'])
   }
 
-  const obj = tryParseJson(raw)
+  const obj = tryParseJson(displayRaw)
   if (obj) {
     const content = pickString(obj, ['content', 'text', 'body', 'data', 'output', 'result'])
     if (content && looksLikeCode(content)) {
@@ -200,16 +236,20 @@ export function parseToolResultDisplay(
     || name.includes('file_grep')
     || name.includes('grep')
   ) {
-    if (looksLikeCode(raw) || raw.includes('\n')) {
-      return { mode: 'code', path, content: raw, lang: langFromPath(path) }
+    if (looksLikeCode(displayRaw) || displayRaw.includes('\n')) {
+      return { mode: 'code', path, content: displayRaw, lang: langFromPath(path) }
     }
   }
 
-  if (looksLikeCode(raw)) {
-    return { mode: 'code', path, content: raw, lang: langFromPath(path) }
+  if (isAgentSpawnTool(toolName) && displayRaw.includes('\n')) {
+    return { mode: 'code', content: displayRaw, lang: 'markdown' }
   }
 
-  return { mode: 'raw', text: formatToolJson(raw) }
+  if (looksLikeCode(displayRaw)) {
+    return { mode: 'code', path, content: displayRaw, lang: langFromPath(path) }
+  }
+
+  return { mode: 'raw', text: formatToolJson(displayRaw) }
 }
 
 export function formatToolJson(raw: string, max = 8000): string {

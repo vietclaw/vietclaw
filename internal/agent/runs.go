@@ -31,13 +31,30 @@ func (s *Service) logToolEvent(ctx context.Context, sessionID, toolName, input, 
 	if ok {
 		okVal = 1
 	}
-	_, err := s.db.ExecContext(ctx, `
+	result, err := s.db.ExecContext(ctx, `
 INSERT INTO tool_events (session_id, tool_name, input, output, ok, error, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		nullable(sessionID), toolName, input, output, okVal, nullable(errText), now)
 	if err != nil {
 		s.logf("tool event log error: %v", err)
+		return
 	}
+	eventID, _ := result.LastInsertId()
+	s.publishSessionEvent(sessionID, SessionEvent{
+		Event:     "tool_call",
+		ToolName:  toolName,
+		ToolInput: input,
+	})
+	resultEvent := SessionEvent{
+		Event:       "tool_result",
+		ToolName:    toolName,
+		ToolResult:  output,
+		ToolEventID: eventID,
+	}
+	if !ok && errText != "" {
+		resultEvent.Error = errText
+	}
+	s.publishSessionEvent(sessionID, resultEvent)
 }
 
 func (s *Service) finishRun(ctx context.Context, id, status, summary, provider, model string) error {
@@ -45,5 +62,28 @@ func (s *Service) finishRun(ctx context.Context, id, status, summary, provider, 
 	_, err := s.db.ExecContext(ctx, `
 UPDATE agent_runs SET status = ?, summary = ?, provider = ?, model = ?, updated_at = ? WHERE id = ?`,
 		status, summary, nullable(provider), nullable(model), now, id)
-	return err
+	if err != nil {
+		return err
+	}
+	s.publishRunLifecycleByRunID(id, status, summary)
+	return nil
+}
+
+func (s *Service) publishRunLifecycleByRunID(runID, status, summary string) {
+	var sessionID string
+	if err := s.db.QueryRow(`SELECT session_id FROM agent_runs WHERE id = ?`, runID).Scan(&sessionID); err != nil || sessionID == "" {
+		return
+	}
+	s.publishRunLifecycle(sessionID, status, summary)
+}
+
+func (s *Service) publishRunLifecycle(sessionID, status, summary string) {
+	s.publishSessionEvent(sessionID, SessionEvent{
+		Event:   "run_status",
+		Status:  status,
+		Summary: summary,
+	})
+	if status == RunStatusCompleted || status == RunStatusFailed || status == RunStatusBlocked || status == RunStatusNeedsApproval {
+		s.publishSessionEvent(sessionID, SessionEvent{Event: "done"})
+	}
 }

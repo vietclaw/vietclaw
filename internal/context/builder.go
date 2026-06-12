@@ -96,6 +96,10 @@ func (b *Builder) Messages(ctx context.Context, sessionID, scope, agentID, userM
 		parts = append(parts, strings.Join(lines, "\n"))
 	}
 
+	if agentBlock := b.agentContextBlock(lang); agentBlock != "" {
+		parts = append(parts, agentBlock)
+	}
+
 	history := b.history(ctx, sessionID)
 	if history != "" {
 		parts = append(parts, i18n.T(lang, i18n.SystemHistoryHeader)+"\n"+history)

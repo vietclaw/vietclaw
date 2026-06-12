@@ -508,7 +508,7 @@ func (r *ToolRegistry) GetDefinitionsForProfile(profile config.AgentProfileConfi
 	list = append(list, r.extraDefs...)
 	list = append(list, r.defs...)
 	if includeDelegate && r.cfg.Framework.Enabled && r.cfg.Framework.DelegateEnabled {
-		list = append(list, FrameworkToolDefinitions()...)
+		list = append(list, FrameworkToolDefinitions(r.cfg.Framework.AllowAutoCreate)...)
 	}
 	if profile.ID != "" {
 		list = append(list, r.agentCustom[profile.ID]...)

@@ -60,7 +60,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto vc-scrollbar">
+    <div class="min-h-0 flex-1 overflow-y-auto overscroll-y-contain vc-scrollbar">
       <div v-if="loading" class="mx-auto max-w-3xl space-y-3 p-6 md:p-8">
         <div v-for="i in 4" :key="i" class="h-24 animate-pulse rounded-2xl bg-vc-bg-subtle" :style="{ animationDelay: `${i * 0.1}s` }" />
       </div>

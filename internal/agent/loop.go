@@ -96,6 +96,10 @@ func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID str
 		finalModel = providerResp.Model
 		if providerResp.Text != "" {
 			accumulatedText += providerResp.Text
+			s.publishSessionEvent(req.SessionID, SessionEvent{
+				Event: "text",
+				Text:  providerResp.Text,
+			})
 		}
 
 		if len(providerResp.ToolCalls) > 0 {
@@ -170,8 +174,15 @@ func (s *Service) StreamAgenticLoop(ctx context.Context, req ChatRequest, runID 
 		var totalCost float64
 		var accumulatedText string
 		maxSteps := s.profileMaxSteps(req.AgentID)
-		spawnNotify := func(agentID, status, summary string) {
-			ch <- providers.StreamChunk{Event: "spawn", ToolName: agentID, ToolInput: status, ToolResult: summary}
+		spawnNotify := func(agentID, status, summary, childSessionID, parentSessionID string) {
+			ch <- providers.StreamChunk{
+				Event:           "spawn",
+				ToolName:        agentID,
+				ToolInput:       status,
+				ToolResult:      summary,
+				SessionID:       childSessionID,
+				ParentSessionID: parentSessionID,
+			}
 		}
 		toolCtx := withSpawnNotifier(s.toolContext(ctx, req), spawnNotify)
 		scope := s.memoryScope(req)
