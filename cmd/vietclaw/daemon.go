@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"vietclaw/internal/agent"
+	"vietclaw/internal/agentfs"
 	"vietclaw/internal/app"
 	"vietclaw/internal/channels"
 	_ "vietclaw/internal/channels/discord"
@@ -55,6 +56,15 @@ func runDaemon() error {
 	if err := db.ApplySchema(database); err != nil {
 		return err
 	}
+	migrated, err := agentfs.MigrateFromConfig(database, paths, &cfg)
+	if err != nil {
+		return fmt.Errorf("migrate agents: %w", err)
+	}
+	if migrated && paths.ConfigFile != "" {
+		if err := config.Save(paths.ConfigFile, cfg); err != nil {
+			return fmt.Errorf("save migrated config: %w", err)
+		}
+	}
 	if err := os.MkdirAll(cfg.Agent.Workspace, 0o755); err != nil {
 		return fmt.Errorf("create workspace: %w", err)
 	}
@@ -71,7 +81,7 @@ func runDaemon() error {
 	}
 	fw := framework.New(cfg.Framework, logger)
 	application.Framework = fw
-	application.Agent = agent.NewService(cfg, database).WithLogger(logger).WithFramework(fw)
+	application.Agent = agent.NewServiceWithDataDir(cfg, database, paths.DataDir).WithLogger(logger).WithFramework(fw)
 	application.Channels = newChannelManager(cfg, application.Agent, database, logger)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -111,7 +121,7 @@ func serveUntilStopped(ctx context.Context, server *http.Server, logger *log.Log
 }
 
 func newChannelManager(cfg config.Config, service *agent.Service, database *sql.DB, logger *log.Logger) *channels.Manager {
-	handler := channels.NewHandler(service, database, logger)
+	handler := channels.NewHandler(service, database, logger, cfg)
 	adapters, err := channels.BuildAdapters(cfg, handler)
 	if err != nil && logger != nil {
 		logger.Printf("channel adapter warning: %v", err)

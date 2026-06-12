@@ -18,7 +18,17 @@ import { marked } from 'marked'
 import type { ChatItem, ChatStepEvent } from '~/composables/useChat'
 import { enhanceCodeBlocks } from '~/utils/enhanceCodeBlocks'
 
-const { currentSession, currentSessionId, isGenerating, sendMessage, clearSessionMessages, stopGeneration } = useChat()
+const {
+  currentSession,
+  currentSessionId,
+  isGenerating,
+  catalogModels,
+  selectedCatalogId,
+  sendMessage,
+  clearSessionMessages,
+  stopGeneration,
+  setSelectedCatalog,
+} = useChat()
 const { t, toolLabel } = useI18n()
 const toast = useToast()
 
@@ -454,7 +464,19 @@ watch(currentSessionId, () => {
     </div>
 
     <div class="shrink-0 px-4 pb-4 pt-2 md:px-8 md:pb-6">
-      <div class="mx-auto max-w-2xl">
+      <div class="mx-auto max-w-2xl space-y-2">
+        <div v-if="catalogModels.length" class="flex items-center justify-end gap-2 px-1">
+          <span class="text-xs text-vc-text-muted">{{ t('chat.model') }}</span>
+          <select
+            :value="selectedCatalogId"
+            class="vc-input max-w-[220px] py-1 text-xs"
+            @change="setSelectedCatalog(($event.target as HTMLSelectElement).value)"
+          >
+            <option v-for="m in catalogModels" :key="m.id" :value="m.id">
+              {{ m.label || m.id }}
+            </option>
+          </select>
+        </div>
         <div class="vc-composer flex items-center gap-1 py-2 pl-4 pr-2">
           <textarea
             ref="textareaRef"

@@ -134,6 +134,21 @@ onMounted(() => {
             />
           </div>
           <VcToggle v-model="config.channels.telegram.respond_in_private" :label="t('channels.respondInPrivate')" size="sm" />
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label class="mb-1 block text-xs text-vc-text-muted">{{ t('channels.commandMode') }}</label>
+              <VcSelect
+                :model-value="config.channels.telegram.command_mode || 'slash'"
+                group="telegram_command_mode"
+                @update:model-value="config.channels.telegram.command_mode = $event"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs text-vc-text-muted">{{ t('channels.commandPrefix') }}</label>
+              <input v-model="config.channels.telegram.command_prefix" type="text" :class="fieldClass" placeholder="/" />
+            </div>
+          </div>
+          <p class="text-xs text-vc-text-muted">{{ t('channels.modelsHint') }}</p>
           <button type="button" class="vc-btn vc-btn-outline text-xs" @click="testToken('telegram')">
             {{ t('channels.testToken') }}
           </button>

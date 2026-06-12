@@ -123,6 +123,15 @@ const monoClass = 'vc-input vc-input--mono'
           <VcToggle v-model="config.framework.enabled" :label="t('settings.field.frameworkEnabled')" size="sm" />
           <VcToggle v-model="config.framework.delegate_enabled" :label="t('settings.field.delegate')" size="sm" />
           <VcToggle v-model="config.framework.hooks_enabled" :label="t('settings.field.hooks')" size="sm" />
+          <VcToggle v-model="config.framework.allow_auto_create" :label="t('settings.field.allowAutoCreate')" size="sm" />
+        </div>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <SettingsField :label="t('settings.field.maxTotalAgents')">
+            <input v-model.number="config.framework.max_total_agents" type="number" min="1" :class="monoClass" />
+          </SettingsField>
+          <SettingsField :label="t('settings.field.maxConcurrentSpawns')">
+            <input v-model.number="config.framework.max_concurrent_spawns" type="number" min="1" :class="monoClass" />
+          </SettingsField>
         </div>
       </SettingsSection>
 

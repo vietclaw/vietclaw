@@ -13,6 +13,7 @@ import (
 
 func (s *Service) ChatStream(ctx context.Context, req ChatRequest) (<-chan providers.StreamChunk, error) {
 	req = normalizeRequest(req, s.cfg)
+	req = s.enrichRequestModel(ctx, req)
 	req = s.applyAgentProfile(ctx, req)
 	if strings.TrimSpace(req.Message) == "" {
 		return nil, fmt.Errorf("%s", s.text(i18n.AgentMessageRequired))
@@ -43,7 +44,7 @@ func (s *Service) ChatStream(ctx context.Context, req ChatRequest) (<-chan provi
 
 func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID string, intent router.Intent) (ChatResponse, error) {
 	embedder := s.router.SelectDefaultEmbedder()
-	messages, err := s.context.Messages(ctx, req.SessionID, s.memoryScope(req), req.Message, embedder)
+	messages, err := s.context.Messages(ctx, req.SessionID, s.memoryScope(req), req.AgentID, req.Message, embedder)
 	if err != nil {
 		_ = s.finishRun(ctx, runID, RunStatusFailed, err.Error(), "", "")
 		return ChatResponse{}, err
@@ -56,6 +57,8 @@ func (s *Service) runAgenticLoop(ctx context.Context, req ChatRequest, runID str
 		return s.selectionError(ctx, req, runID, intent, err), nil
 	}
 	chatReq.Model = selection.Model
+	req.ParentProvider = selection.Provider.ID()
+	req.ParentModel = selection.Model
 
 	var finalReply string
 	var finalProvider string
@@ -143,7 +146,7 @@ func (s *Service) StreamAgenticLoop(ctx context.Context, req ChatRequest, runID 
 		ch <- providers.StreamChunk{Event: "session", SessionID: req.SessionID}
 
 		embedder := s.router.SelectDefaultEmbedder()
-		messages, err := s.context.Messages(ctx, req.SessionID, s.memoryScope(req), req.Message, embedder)
+		messages, err := s.context.Messages(ctx, req.SessionID, s.memoryScope(req), req.AgentID, req.Message, embedder)
 		if err != nil {
 			_ = s.finishRun(ctx, runID, RunStatusFailed, err.Error(), "", "")
 			ch <- providers.StreamChunk{Error: err.Error()}
@@ -159,13 +162,18 @@ func (s *Service) StreamAgenticLoop(ctx context.Context, req ChatRequest, runID 
 			return
 		}
 		chatReq.Model = selection.Model
+		req.ParentProvider = selection.Provider.ID()
+		req.ParentModel = selection.Model
 
 		var finalProvider string
 		var finalModel string
 		var totalCost float64
 		var accumulatedText string
 		maxSteps := s.profileMaxSteps(req.AgentID)
-		toolCtx := s.toolContext(ctx, req)
+		spawnNotify := func(agentID, status, summary string) {
+			ch <- providers.StreamChunk{Event: "spawn", ToolName: agentID, ToolInput: status, ToolResult: summary}
+		}
+		toolCtx := withSpawnNotifier(s.toolContext(ctx, req), spawnNotify)
 		scope := s.memoryScope(req)
 
 		for step := 1; ; step++ {
@@ -295,12 +303,6 @@ func (s *Service) maxOutputTokens() int {
 	return s.cfg.Agent.MaxOutputTokens
 }
 
-func (s *Service) selectLoopProvider(ctx context.Context, req ChatRequest, chatReq providers.ChatRequest, excluded []string) (router.Selection, []string, error) {
-	allowed := s.profile(req.AgentID).Providers
-	selection, err := s.router.SelectForProfile(ctx, chatReq, excluded, allowed)
-	return selection, excluded, err
-}
-
 func (s *Service) selectionError(ctx context.Context, req ChatRequest, runID string, intent router.Intent, err error) ChatResponse {
 	reply := err.Error()
 	_ = s.addMessage(ctx, req.SessionID, RoleAssistant, reply)
@@ -402,7 +404,7 @@ func (s *Service) executeToolCall(ctx context.Context, req ChatRequest, runID, s
 	var toolResult string
 	var execErr error
 	if s.isFrameworkTool(tc.Function.Name) {
-		toolResult, execErr = s.handleDelegate(ctx, req, runID, tc.Function.Arguments)
+		toolResult, execErr = s.handleFrameworkTool(ctx, req, runID, tc.Function.Name, tc.Function.Arguments, spawnNotifierFromContext(ctx))
 	} else if s.framework != nil && s.framework.Config.HooksEnabled {
 		_ = s.framework.Hooks.Emit(ctx, framework.EventBeforeTool, framework.HookContext{
 			SessionID: sessionID,

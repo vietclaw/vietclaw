@@ -20,6 +20,7 @@ func ApplySchema(database *sql.DB) error {
 	_, _ = database.Exec(`ALTER TABLE harness_runs ADD COLUMN final_diff TEXT`)
 	_, _ = database.Exec(`ALTER TABLE harness_runs ADD COLUMN failure_reason TEXT`)
 	_, _ = database.Exec(`ALTER TABLE agent_runs ADD COLUMN parent_run_id TEXT`)
+	_, _ = database.Exec(`ALTER TABLE sessions ADD COLUMN preferred_catalog_id TEXT`)
 
 	return nil
 }

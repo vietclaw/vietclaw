@@ -8,17 +8,19 @@ type Paths struct {
 }
 
 type Config struct {
-	Server    ServerConfig         `json:"server"`
-	Framework FrameworkConfig      `json:"framework"`
-	Runtime   RuntimeConfig        `json:"runtime"`
-	Database  DatabaseConfig       `json:"database"`
-	Agent     AgentConfig          `json:"agent"`
-	Channels  ChannelsConfig       `json:"channels"`
-	Providers []ProviderConfig     `json:"providers"`
-	Router    RouterConfig         `json:"router"`
-	Tools     ToolsConfig          `json:"tools"`
-	Budget    BudgetConfig         `json:"budget"`
-	Agents    []AgentProfileConfig `json:"agents,omitempty"`
+	Server    ServerConfig     `json:"server"`
+	Framework FrameworkConfig  `json:"framework"`
+	Runtime   RuntimeConfig    `json:"runtime"`
+	Database  DatabaseConfig   `json:"database"`
+	Agent     AgentConfig      `json:"agent"`
+	Channels  ChannelsConfig   `json:"channels"`
+	Providers []ProviderConfig `json:"providers"`
+	Router    RouterConfig     `json:"router"`
+	Tools     ToolsConfig      `json:"tools"`
+	Budget    BudgetConfig     `json:"budget"`
+	Models    ModelsConfig     `json:"models"`
+	// Agents is deprecated; used only during one-shot migration to ~/.vietclaw/agents/.
+	Agents []AgentProfileConfig `json:"agents,omitempty"`
 }
 
 type ServerConfig struct {
@@ -69,9 +71,12 @@ type MemoryToolsConfig struct {
 }
 
 type FrameworkConfig struct {
-	Enabled         bool `json:"enabled"`
-	DelegateEnabled bool `json:"delegate_enabled"`
-	HooksEnabled    bool `json:"hooks_enabled"`
+	Enabled             bool `json:"enabled"`
+	DelegateEnabled     bool `json:"delegate_enabled"`
+	HooksEnabled        bool `json:"hooks_enabled"`
+	MaxTotalAgents      int  `json:"max_total_agents"`
+	MaxConcurrentSpawns int  `json:"max_concurrent_spawns"`
+	AllowAutoCreate     bool `json:"allow_auto_create"`
 }
 
 type AgentProfileConfig struct {
@@ -114,6 +119,21 @@ type TelegramConfig struct {
 	RespondInGroups    string   `json:"respond_in_groups"`
 	RespondInPrivate   bool     `json:"respond_in_private"`
 	PollTimeoutSeconds int      `json:"poll_timeout_seconds"`
+	CommandMode        string   `json:"command_mode"`
+	CommandPrefix      string   `json:"command_prefix"`
+}
+
+type ModelsConfig struct {
+	Catalog          []CatalogModelConfig `json:"catalog"`
+	DefaultCatalogID string               `json:"default_catalog_id"`
+}
+
+type CatalogModelConfig struct {
+	ID       string `json:"id"`
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Label    string `json:"label"`
+	Enabled  bool   `json:"enabled"`
 }
 
 type ProviderConfig struct {

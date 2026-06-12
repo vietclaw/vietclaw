@@ -11,6 +11,7 @@ import (
 
 func (s *Service) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
 	req = normalizeRequest(req, s.cfg)
+	req = s.enrichRequestModel(ctx, req)
 	req = s.applyAgentProfile(ctx, req)
 	if strings.TrimSpace(req.Message) == "" {
 		errText := s.text(i18n.AgentMessageRequired)

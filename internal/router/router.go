@@ -55,6 +55,33 @@ func (r *ModelRouter) Select(ctx context.Context, req providers.ChatRequest, exc
 	return r.SelectForProfile(ctx, req, excludeIDs, nil)
 }
 
+func (r *ModelRouter) SelectExplicit(ctx context.Context, req providers.ChatRequest, excludeIDs []string, allowedProviderIDs []string, providerID, modelID string) (Selection, error) {
+	pool := r.providersForProfile(allowedProviderIDs)
+	var provider providers.Provider
+	for _, p := range pool {
+		if p.ID() == providerID {
+			provider = p
+			break
+		}
+	}
+	if provider == nil {
+		return Selection{}, fmt.Errorf("provider not available: %s", providerID)
+	}
+	model := strings.TrimSpace(modelID)
+	if model == "" {
+		model = r.defaultModel(provider)
+	}
+	req.Model = model
+	estimate := provider.EstimateCost(req)
+	if r.needsApproval(ctx, estimate.EstimatedCostUSD) {
+		return Selection{}, fmt.Errorf("approval required for estimated cost %.4f USD", estimate.EstimatedCostUSD)
+	}
+	if r.exceedsDailyBudget(ctx, estimate.EstimatedCostUSD) {
+		return Selection{}, fmt.Errorf("daily budget exceeded")
+	}
+	return Selection{Provider: provider, Model: model, Estimate: estimate}, nil
+}
+
 func (r *ModelRouter) SelectForProfile(ctx context.Context, req providers.ChatRequest, excludeIDs []string, allowedProviderIDs []string) (Selection, error) {
 	pool := r.providersForProfile(allowedProviderIDs)
 	provider := r.defaultProviderFrom(pool, excludeIDs)

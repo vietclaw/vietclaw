@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vietclaw/internal/agentfs"
 	"vietclaw/internal/config"
 	"vietclaw/internal/i18n"
 	"vietclaw/internal/memory"
@@ -19,13 +20,15 @@ const (
 )
 
 type ToolRegistry struct {
-	policy    Policy
-	cfg       config.Config
-	mem       *memory.Store
-	tools     map[string]Tool
-	mcp       map[string]mcpToolRef
-	defs      []providers.ToolDefinition
-	extraDefs []providers.ToolDefinition
+	policy      Policy
+	cfg         config.Config
+	mem         *memory.Store
+	agents      *agentfs.Registry
+	tools       map[string]Tool
+	mcp         map[string]mcpToolRef
+	defs        []providers.ToolDefinition
+	extraDefs   []providers.ToolDefinition
+	agentCustom map[string][]providers.ToolDefinition
 }
 
 type mcpToolRef struct {
@@ -36,10 +39,11 @@ type mcpToolRef struct {
 func NewRegistry(cfg config.Config) *ToolRegistry {
 	p := NewPolicy(cfg)
 	r := &ToolRegistry{
-		policy: p,
-		cfg:    cfg,
-		tools:  make(map[string]Tool),
-		mcp:    make(map[string]mcpToolRef),
+		policy:      p,
+		cfg:         cfg,
+		tools:       make(map[string]Tool),
+		mcp:         make(map[string]mcpToolRef),
+		agentCustom: make(map[string][]providers.ToolDefinition),
 	}
 	r.tools[toolFileRead] = FileRead{Policy: p}
 	r.tools[toolFileWrite] = FileWrite{Policy: p}
@@ -74,6 +78,45 @@ func (r *ToolRegistry) Register(tool Tool, def providers.ToolDefinition) {
 	}
 	r.tools[name] = tool
 	r.extraDefs = append(r.extraDefs, def)
+}
+
+func (r *ToolRegistry) WithAgentRegistry(registry *agentfs.Registry) *ToolRegistry {
+	r.agents = registry
+	r.ReloadAgentTools(registry)
+	return r
+}
+
+func (r *ToolRegistry) ReloadAgentTools(registry *agentfs.Registry) {
+	if registry == nil {
+		return
+	}
+	custom := make(map[string][]providers.ToolDefinition)
+	for _, def := range registry.List() {
+		for _, tool := range def.CustomTools {
+			name := normalizeToolName(tool.Name)
+			params := tool.Parameters
+			if params == nil {
+				params = map[string]any{"type": "object", "properties": map[string]any{}}
+			}
+			custom[def.ID] = append(custom[def.ID], providers.ToolDefinition{
+				Type: "function",
+				Function: providers.FunctionDetail{
+					Name:        name,
+					Description: tool.Description,
+					Parameters:  params,
+				},
+			})
+			r.tools[name] = customToolRunner{
+				registry: registry,
+				agentID:  def.ID,
+				tool:     tool,
+				policy:   r.policy,
+				cfg:      r.cfg,
+				mcp:      r.mcp,
+			}
+		}
+	}
+	r.agentCustom = custom
 }
 
 func (r *ToolRegistry) WithMemory(mem *memory.Store) *ToolRegistry {
@@ -464,8 +507,11 @@ func (r *ToolRegistry) GetDefinitionsForProfile(profile config.AgentProfileConfi
 	list = append(list, extraToolDefinitions()...)
 	list = append(list, r.extraDefs...)
 	list = append(list, r.defs...)
-	if includeDelegate && r.cfg.Framework.DelegateEnabled {
-		list = append(list, AgentDelegateDefinition())
+	if includeDelegate && r.cfg.Framework.Enabled && r.cfg.Framework.DelegateEnabled {
+		list = append(list, FrameworkToolDefinitions()...)
+	}
+	if profile.ID != "" {
+		list = append(list, r.agentCustom[profile.ID]...)
 	}
 	if len(profile.Tools) > 0 {
 		list = filterDefinitions(list, profile.Tools)

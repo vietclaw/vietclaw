@@ -38,8 +38,11 @@ func TestDefaultIncludesAgentRuntime(t *testing.T) {
 	if cfg.Router.AgentRouting != config.DefaultAgentRouting {
 		t.Fatalf("router agent routing = %q", cfg.Router.AgentRouting)
 	}
-	if len(cfg.Agents) != 1 || cfg.Agents[0].ID != config.DefaultAgentID {
-		t.Fatalf("default agents invalid: %#v", cfg.Agents)
+	if len(cfg.Models.Catalog) == 0 || cfg.Models.DefaultCatalogID == "" {
+		t.Fatalf("default models catalog invalid: %#v", cfg.Models)
+	}
+	if cfg.Framework.MaxTotalAgents < 1 || cfg.Framework.MaxConcurrentSpawns < 1 {
+		t.Fatalf("framework spawn defaults invalid: %#v", cfg.Framework)
 	}
 	if cfg.Tools.Shell.Enabled {
 		t.Fatal("shell must be disabled by default")

@@ -43,16 +43,67 @@ func (a *Adapter) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create discord session: %w", err)
 	}
-	session.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentMessageContent
+	session.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentMessageContent | discordgo.IntentGuilds
 
 	session.AddHandler(a.onMessage(ctx))
+	session.AddHandler(a.onInteraction(ctx))
 	if err := session.Open(); err != nil {
 		return fmt.Errorf("open discord session: %w", err)
+	}
+	if session.State != nil && session.State.User != nil {
+		_, _ = session.ApplicationCommandCreate(session.State.User.ID, "", &discordgo.ApplicationCommand{
+			Name:        "models",
+			Description: "List or select the AI model catalog entry",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "id",
+					Description: "Catalog model id to select",
+					Required:    false,
+				},
+			},
+		})
 	}
 	defer session.Close()
 
 	<-ctx.Done()
 	return nil
+}
+
+func (a *Adapter) onInteraction(ctx context.Context) func(*discordgo.Session, *discordgo.InteractionCreate) {
+	return func(s *discordgo.Session, event *discordgo.InteractionCreate) {
+		if event == nil || event.ApplicationCommandData().Name != "models" {
+			return
+		}
+		userID := ""
+		if event.Member != nil && event.Member.User != nil {
+			userID = event.Member.User.ID
+		} else if event.User != nil {
+			userID = event.User.ID
+		}
+		arg := ""
+		for _, opt := range event.ApplicationCommandData().Options {
+			if opt.Name == "id" {
+				arg = opt.StringValue()
+			}
+		}
+		text := "/models"
+		if arg != "" {
+			text += " " + arg
+		}
+		result, err := channels.HandleModelCommand(ctx, a.handler.DB, a.handler.Config, channels.PlatformDiscord, userID, text)
+		if err != nil {
+			_ = s.InteractionRespond(event.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "Failed to handle /models"},
+			})
+			return
+		}
+		_ = s.InteractionRespond(event.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: result.Reply},
+		})
+	}
 }
 
 func (a *Adapter) onMessage(ctx context.Context) func(*discordgo.Session, *discordgo.MessageCreate) {

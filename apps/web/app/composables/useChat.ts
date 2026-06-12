@@ -2,12 +2,23 @@ import type { ChatResponse } from '~/types'
 import { apiFetch } from '~/utils/api'
 
 export type ChatStepEvent = {
-  type: 'text' | 'tool_call' | 'tool_result' | 'error' | 'done'
+  type: 'text' | 'tool_call' | 'tool_result' | 'spawn' | 'error' | 'done'
   text?: string
   toolName?: string
   toolInput?: string
   toolResult?: string
+  agentId?: string
+  spawnStatus?: string
+  spawnSummary?: string
   error?: string
+}
+
+export type CatalogModel = {
+  id: string
+  provider: string
+  model: string
+  label: string
+  enabled: boolean
 }
 
 type SSEEvent = {
@@ -33,6 +44,7 @@ export type ChatSession = {
 
 const STORAGE_KEY = 'vietclaw_chats'
 const CONFIG_KEY = 'vietclaw_config'
+const MODEL_KEY = 'vietclaw_catalog_id'
 
 export function sessionPath(id: string) {
   return `/p/${encodeURIComponent(id)}`
@@ -41,6 +53,9 @@ export function sessionPath(id: string) {
 const sessions = ref<ChatSession[]>([])
 const currentSessionId = ref('')
 const isGenerating = ref(false)
+const catalogModels = ref<CatalogModel[]>([])
+const defaultCatalogId = ref('')
+const selectedCatalogId = ref('')
 let streamAbort: AbortController | null = null
 let streamReader: ReadableStreamDefaultReader<Uint8Array> | null = null
 
@@ -212,6 +227,13 @@ function applySSEEvent(event: SSEEvent, session: ChatSession, msgIndex: number):
       toolName: parsed.name,
       toolResult: parsed.result
     })
+  } else if (event.event === 'spawn') {
+    assistantMsg.steps.push({
+      type: 'spawn',
+      agentId: parsed.agent_id,
+      spawnStatus: parsed.status,
+      spawnSummary: parsed.summary
+    })
   } else if (event.event === 'text' || parsed.text) {
     assistantMsg.text += parsed.text
     const last = assistantMsg.steps[assistantMsg.steps.length - 1]
@@ -243,6 +265,37 @@ function stopGeneration() {
   }
 }
 
+async function loadCatalogModels() {
+  try {
+    const res = await apiFetch<{ catalog: CatalogModel[], default_catalog_id: string }>('/api/models/catalog')
+    catalogModels.value = (res.catalog || []).filter(m => m.enabled)
+    defaultCatalogId.value = res.default_catalog_id || catalogModels.value[0]?.id || ''
+    if (!selectedCatalogId.value) {
+      selectedCatalogId.value = import.meta.client
+        ? localStorage.getItem(MODEL_KEY) || defaultCatalogId.value
+        : defaultCatalogId.value
+    }
+  } catch {
+    catalogModels.value = []
+  }
+}
+
+async function setSelectedCatalog(id: string) {
+  selectedCatalogId.value = id
+  if (import.meta.client) {
+    localStorage.setItem(MODEL_KEY, id)
+  }
+  const s = currentSession()
+  if (s?.sessionId) {
+    try {
+      await apiFetch(`/api/sessions/${encodeURIComponent(s.sessionId)}/model`, {
+        method: 'PUT',
+        body: JSON.stringify({ catalog_id: id })
+      })
+    } catch {}
+  }
+}
+
 async function sendMessage(text: string) {
   const s = currentSession()
   if (!s || isGenerating.value) return
@@ -269,7 +322,8 @@ async function sendMessage(text: string) {
         user_id: 'local',
         channel: 'web',
         message: text,
-        mode: 'eco'
+        mode: 'eco',
+        catalog_id: selectedCatalogId.value || undefined
       })
     })
 
@@ -335,11 +389,14 @@ async function sendMessage(text: string) {
 
 export function useChat() {
   if (sessions.value.length === 0) loadSessions()
+  if (catalogModels.value.length === 0) void loadCatalogModels()
 
   return {
     sessions,
     currentSessionId,
     isGenerating,
+    catalogModels,
+    selectedCatalogId,
     currentSession,
     createSession,
     switchSession,
@@ -347,6 +404,8 @@ export function useChat() {
     clearSessionMessages,
     sendMessage,
     stopGeneration,
+    loadCatalogModels,
+    setSelectedCatalog,
     sessionPath,
     loadSessions,
     saveSessions,

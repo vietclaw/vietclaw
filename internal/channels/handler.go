@@ -16,18 +16,20 @@ import (
 const defaultIdempotencyTTL = 10 * time.Minute
 
 type Handler struct {
-	Agent *agent.Service
-	DB    *sql.DB
-	Log   *log.Logger
-	Guard *TTLGuard
+	Agent  *agent.Service
+	DB     *sql.DB
+	Log    *log.Logger
+	Guard  *TTLGuard
+	Config config.Config
 }
 
-func NewHandler(service *agent.Service, db *sql.DB, logger *log.Logger) *Handler {
+func NewHandler(service *agent.Service, db *sql.DB, logger *log.Logger, cfg config.Config) *Handler {
 	return &Handler{
-		Agent: service,
-		DB:    db,
-		Log:   logger,
-		Guard: NewTTLGuard(defaultIdempotencyTTL),
+		Agent:  service,
+		DB:     db,
+		Log:    logger,
+		Guard:  NewTTLGuard(defaultIdempotencyTTL),
+		Config: cfg,
 	}
 }
 
@@ -43,26 +45,43 @@ func (h *Handler) Handle(ctx context.Context, msg InboundMessage, policy Policy,
 	if !h.Guard.Seen(msg.Platform + ":" + msg.MessageID) {
 		return nil
 	}
-	if !ShouldHandle(msg, policy) {
-		return nil
-	}
 
 	prompt := strings.TrimSpace(msg.Text)
 	prompt = PromptWithAttachments(prompt, msg.Attachments)
+	sessionID := SessionKey(msg)
+	userID := UserIdentity(msg)
+	scopeID := userID
+	if msg.ChatID != "" {
+		scopeID = msg.ChatID
+	}
+
+	if prompt != "" {
+		cmdResult, err := HandleModelCommand(ctx, h.DB, h.Config, msg.Platform, scopeID, prompt)
+		if err != nil {
+			return err
+		}
+		if cmdResult.Handled {
+			return send(ctx, msg, cmdResult.Reply)
+		}
+	}
+
+	if !ShouldHandle(msg, policy) {
+		return nil
+	}
 	if prompt == "" {
 		prompt = h.text(i18n.ChannelEmptyPrompt)
 	}
-	sessionID := SessionKey(msg)
-	userID := UserIdentity(msg)
 
 	if err := h.insertChannelMessage(ctx, msg, sessionID, userID, "in", prompt); err != nil && h.Log != nil {
 		h.Log.Printf("channel message log failed platform=%s direction=in err=%v", msg.Platform, err)
 	}
+	catalogID := ResolveCatalogID(h.DB, h.Config, msg.Platform, scopeID, sessionID)
 	resp, err := h.Agent.Chat(ctx, agent.ChatRequest{
 		SessionID: sessionID,
 		UserID:    userID,
 		Channel:   msg.Platform,
 		Message:   prompt,
+		CatalogID: catalogID,
 	})
 	if err != nil {
 		if h.Log != nil {

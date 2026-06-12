@@ -9,20 +9,18 @@ import (
 )
 
 func (s *Service) profile(agentID string) config.AgentProfileConfig {
-	if agentID == "" {
-		agentID = config.DefaultAgentID
+	if s.agents == nil {
+		return config.AgentProfileConfig{ID: config.DefaultAgentID}
 	}
-	for _, profile := range s.cfg.Agents {
-		if profile.ID == agentID {
-			return profile
+	def, ok := s.agents.Get(agentID)
+	if !ok {
+		return config.AgentProfileConfig{
+			ID:       config.DefaultAgentID,
+			Name:     s.cfg.Agent.Name,
+			Language: s.cfg.Agent.Language,
 		}
 	}
-	return config.AgentProfileConfig{
-		ID:          config.DefaultAgentID,
-		Name:        s.cfg.Agent.Name,
-		Language:    s.cfg.Agent.Language,
-		MemoryScope: "",
-	}
+	return def.Profile()
 }
 
 func (s *Service) memoryScope(req ChatRequest) string {
@@ -37,11 +35,17 @@ func (s *Service) memoryScope(req ChatRequest) string {
 }
 
 func (s *Service) selectDelegateAgent(message string) string {
-	return s.router.SelectAgent(context.Background(), message, s.Language(), s.cfg.Agents)
+	if s.agents == nil {
+		return ""
+	}
+	return s.router.SelectAgent(context.Background(), message, s.Language(), s.agents.Profiles())
 }
 
 func (s *Service) applyAgentProfile(ctx context.Context, req ChatRequest) ChatRequest {
-	if delegate := s.router.SelectAgent(ctx, req.Message, s.Language(), s.cfg.Agents); delegate != "" {
+	if s.agents == nil {
+		return req
+	}
+	if delegate := s.router.SelectAgent(ctx, req.Message, s.Language(), s.agents.Profiles()); delegate != "" {
 		req.AgentID = delegate
 	}
 	return req
@@ -69,5 +73,21 @@ func (s *Service) applyProfilePersona(req ChatRequest, messages []providers.Mess
 		return messages
 	}
 	messages[0].Content += "\n\nAgent persona:\n" + profile.Persona
+	return s.applyToolGuides(req.AgentID, messages)
+}
+
+func (s *Service) applyToolGuides(agentID string, messages []providers.Message) []providers.Message {
+	if s.agents == nil || len(messages) == 0 || messages[0].Role != "system" {
+		return messages
+	}
+	guides := s.agents.ToolGuidesFor(agentID)
+	if len(guides) == 0 {
+		return messages
+	}
+	lines := []string{"Tool guides:"}
+	for _, guide := range guides {
+		lines = append(lines, "- "+guide.Tool+": "+guide.Instructions)
+	}
+	messages[0].Content += "\n\n" + strings.Join(lines, "\n")
 	return messages
 }

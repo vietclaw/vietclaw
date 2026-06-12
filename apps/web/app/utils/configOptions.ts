@@ -11,6 +11,7 @@ export const MEMORY_SCOPES = ['global', 'user', 'session'] as const
 export const MEMORY_KINDS = ['note', 'fact', 'rule', 'preference'] as const
 export const MEMORY_CONFIDENCE = ['high', 'medium', 'low'] as const
 export const UI_LANGUAGES = ['vi', 'en'] as const
+export const TELEGRAM_COMMAND_MODES = ['slash', 'prefix'] as const
 
 export type OptionGroup =
   | 'experience'
@@ -24,6 +25,7 @@ export type OptionGroup =
   | 'memory_kind'
   | 'memory_confidence'
   | 'language'
+  | 'telegram_command_mode'
 
 export const OPTION_GROUPS: Record<OptionGroup, readonly string[]> = {
   experience: AGENT_EXPERIENCES,
@@ -37,4 +39,5 @@ export const OPTION_GROUPS: Record<OptionGroup, readonly string[]> = {
   memory_kind: MEMORY_KINDS,
   memory_confidence: MEMORY_CONFIDENCE,
   language: UI_LANGUAGES,
+  telegram_command_mode: TELEGRAM_COMMAND_MODES,
 }

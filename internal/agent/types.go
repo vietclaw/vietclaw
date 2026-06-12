@@ -26,6 +26,11 @@ type ChatRequest struct {
 	Channel   string `json:"channel"`
 	Message   string `json:"message"`
 	Mode      string `json:"mode"`
+	Provider  string `json:"provider,omitempty"`
+	Model     string `json:"model,omitempty"`
+	CatalogID string `json:"catalog_id,omitempty"`
+	ParentProvider string `json:"-"`
+	ParentModel    string `json:"-"`
 }
 
 type ChatResponse struct {

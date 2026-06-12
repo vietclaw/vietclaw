@@ -35,10 +35,27 @@ func Validate(cfg Config) error {
 			return fmt.Errorf("provider %s type is required", provider.ID)
 		}
 	}
-	for _, profile := range cfg.Agents {
-		if profile.ID == "" {
-			return fmt.Errorf("agent profile id is required")
+	if cfg.Framework.MaxTotalAgents < 1 {
+		return fmt.Errorf("framework.max_total_agents must be >= 1")
+	}
+	if cfg.Framework.MaxConcurrentSpawns < 1 {
+		return fmt.Errorf("framework.max_concurrent_spawns must be >= 1")
+	}
+	for _, entry := range cfg.Models.Catalog {
+		if entry.ID == "" {
+			return fmt.Errorf("models.catalog entry id is required")
 		}
+		if entry.Provider == "" {
+			return fmt.Errorf("models.catalog entry %s provider is required", entry.ID)
+		}
+		if entry.Model == "" {
+			return fmt.Errorf("models.catalog entry %s model is required", entry.ID)
+		}
+	}
+	if cfg.Channels.Telegram.CommandMode != "" &&
+		cfg.Channels.Telegram.CommandMode != "slash" &&
+		cfg.Channels.Telegram.CommandMode != "prefix" {
+		return fmt.Errorf("channels.telegram.command_mode must be slash or prefix")
 	}
 	return nil
 }

@@ -7,6 +7,9 @@ export type FrameworkConfig = {
   enabled: boolean
   delegate_enabled: boolean
   hooks_enabled: boolean
+  max_total_agents: number
+  max_concurrent_spawns: number
+  allow_auto_create: boolean
 }
 
 export type RuntimeConfig = {
@@ -74,6 +77,21 @@ export type TelegramConfig = {
   respond_in_groups: string
   respond_in_private: boolean
   poll_timeout_seconds: number
+  command_mode: string
+  command_prefix: string
+}
+
+export type CatalogModelConfig = {
+  id: string
+  provider: string
+  model: string
+  label: string
+  enabled: boolean
+}
+
+export type ModelsConfig = {
+  catalog: CatalogModelConfig[]
+  default_catalog_id: string
 }
 
 export type ChannelsConfig = {
@@ -138,17 +156,6 @@ export type BudgetConfig = {
   require_approval_above_usd: number
 }
 
-export type AgentProfileConfig = {
-  id: string
-  name: string
-  language: string
-  persona: string
-  tools?: string[]
-  providers?: string[]
-  memory_scope: string
-  max_steps?: number
-}
-
 export type VietClawConfig = {
   server: ServerConfig
   framework: FrameworkConfig
@@ -160,7 +167,7 @@ export type VietClawConfig = {
   router: RouterConfig
   tools: ToolsConfig
   budget: BudgetConfig
-  agents?: AgentProfileConfig[]
+  models: ModelsConfig
 }
 
 export type SettingsPutResponse = {

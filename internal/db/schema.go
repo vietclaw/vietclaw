@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id TEXT NOT NULL,
   title TEXT,
   summary TEXT,
+  preferred_catalog_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

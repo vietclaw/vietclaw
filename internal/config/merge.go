@@ -30,9 +30,7 @@ func MergeDefault(cfg Config, def Config) Config {
 	if cfg.Budget.RequireApprovalAboveUSD == 0 {
 		cfg.Budget.RequireApprovalAboveUSD = def.Budget.RequireApprovalAboveUSD
 	}
-	if cfg.Agents == nil {
-		cfg.Agents = def.Agents
-	}
+	cfg.Models = mergeModels(cfg.Models, def.Models)
 	return cfg
 }
 
@@ -45,6 +43,22 @@ func mergeFramework(cfg FrameworkConfig, def FrameworkConfig) FrameworkConfig {
 	}
 	if !cfg.HooksEnabled {
 		cfg.HooksEnabled = def.HooksEnabled
+	}
+	if cfg.MaxTotalAgents == 0 {
+		cfg.MaxTotalAgents = def.MaxTotalAgents
+	}
+	if cfg.MaxConcurrentSpawns == 0 {
+		cfg.MaxConcurrentSpawns = def.MaxConcurrentSpawns
+	}
+	return cfg
+}
+
+func mergeModels(cfg ModelsConfig, def ModelsConfig) ModelsConfig {
+	if len(cfg.Catalog) == 0 {
+		cfg.Catalog = def.Catalog
+	}
+	if cfg.DefaultCatalogID == "" {
+		cfg.DefaultCatalogID = def.DefaultCatalogID
 	}
 	return cfg
 }
@@ -154,6 +168,12 @@ func mergeTelegram(cfg TelegramConfig, def TelegramConfig) TelegramConfig {
 	}
 	if cfg.PollTimeoutSeconds == 0 {
 		cfg.PollTimeoutSeconds = def.PollTimeoutSeconds
+	}
+	if cfg.CommandMode == "" {
+		cfg.CommandMode = def.CommandMode
+	}
+	if cfg.CommandPrefix == "" {
+		cfg.CommandPrefix = def.CommandPrefix
 	}
 	return cfg
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"vietclaw/internal/agent"
+	"vietclaw/internal/agentfs"
 	"vietclaw/internal/config"
 	"vietclaw/internal/db"
 )
@@ -27,7 +28,7 @@ func TestAgentProfileMemoryIsolation(t *testing.T) {
 		t.Fatalf("agent id = %q", resp.AgentID)
 	}
 
-	researcher, err := service.Memory().Search(ctx, "agent:researcher:user:local", "notebook", 10)
+	researcher, err := service.Memory().Search(ctx, "researcher:user:local", "notebook", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,18 +78,33 @@ func TestLLMDelegateSelectsAgentProfile(t *testing.T) {
 
 func testService(t *testing.T) (*agent.Service, func()) {
 	t.Helper()
-	database, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	dir := t.TempDir()
+	database, err := db.Open(filepath.Join(dir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := db.ApplySchema(database); err != nil {
 		t.Fatal(err)
 	}
-	cfg := config.Default(config.Paths{DataDir: t.TempDir()})
-	cfg.Agents = append(cfg.Agents, config.AgentProfileConfig{
-		ID:      "researcher",
-		Name:    "Researcher",
-		Persona: "Focus on research tasks.",
-	})
-	return agent.NewService(cfg, database), func() { _ = database.Close() }
+	cfg := config.Default(config.Paths{DataDir: dir})
+	agentsRoot := agentfs.DefaultRoot(dir)
+	if err := agentfs.WriteAgent(filepath.Join(agentsRoot, "default", agentfs.AgentFileName), agentfs.CreateRequest{
+		ID:        config.DefaultAgentID,
+		Name:      cfg.Agent.Name,
+		Language:  cfg.Agent.Language,
+		Spawnable: false,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := agentfs.WriteAgent(filepath.Join(agentsRoot, "researcher", agentfs.AgentFileName), agentfs.CreateRequest{
+		ID:          "researcher",
+		Name:        "Researcher",
+		Language:    cfg.Agent.Language,
+		Persona:     "Focus on research tasks.",
+		MemoryScope: "researcher",
+		Spawnable:   true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return agent.NewServiceWithDataDir(cfg, database, dir), func() { _ = database.Close() }
 }

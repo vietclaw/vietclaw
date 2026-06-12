@@ -35,7 +35,7 @@ func TestBuilderLimitsContextChars(t *testing.T) {
 	}
 
 	builder := contextbuilder.New(cfg, database, store)
-	messages, err := builder.Messages(context.Background(), "", "local", "token", nil)
+	messages, err := builder.Messages(context.Background(), "", "user:local", config.DefaultAgentID, "token", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestBuilderInjectsMatchingSkill(t *testing.T) {
 	cfg.Agent.SkillDirs = []string{filepath.Dir(dir)}
 	store := memory.NewStore(database)
 	builder := contextbuilder.New(cfg, database, store)
-	messages, err := builder.Messages(context.Background(), "", "local", "please review this", nil)
+	messages, err := builder.Messages(context.Background(), "", "user:local", config.DefaultAgentID, "please review this", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

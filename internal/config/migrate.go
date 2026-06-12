@@ -10,11 +10,5 @@ func ApplyLegacyMigrations(cfg Config) Config {
 	if cfg.Agent.MaxOutputTokens > 0 {
 		cfg.Agent.MaxOutputTokens = DefaultMaxOutputTokens
 	}
-	for i := range cfg.Agents {
-		switch cfg.Agents[i].MaxSteps {
-		case 5, 12:
-			cfg.Agents[i].MaxSteps = 0
-		}
-	}
 	return cfg
 }

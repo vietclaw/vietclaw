@@ -65,5 +65,7 @@ func applyConfig(application *app.App, cfg config.Config) {
 	application.Config = cfg
 	fw := framework.New(cfg.Framework, application.Logger)
 	application.Framework = fw
-	application.Agent = agent.NewService(cfg, application.DB).WithLogger(application.Logger).WithFramework(fw)
+	svc := agent.NewServiceWithDataDir(cfg, application.DB, application.DataDir).WithLogger(application.Logger).WithFramework(fw)
+	_ = svc.ReloadAgents()
+	application.Agent = svc
 }

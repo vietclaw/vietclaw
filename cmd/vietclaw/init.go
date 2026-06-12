@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"vietclaw/internal/agentfs"
 	"vietclaw/internal/config"
 	"vietclaw/internal/db"
 	"vietclaw/internal/logging"
@@ -40,6 +41,16 @@ func runInit() error {
 	if err := db.ApplySchema(database); err != nil {
 		return err
 	}
+	if _, err := agentfs.MigrateFromConfig(database, paths, &cfg); err != nil {
+		return err
+	}
+	if createdConfig {
+		if err := config.Save(paths.ConfigFile, cfg); err != nil {
+			return err
+		}
+	}
+	registry := agentfs.NewRegistry(agentfs.DefaultRoot(paths.DataDir), cfg)
+	_ = registry.Reload()
 
 	printCreated("data dir", paths.DataDir, true)
 	printCreated("config", paths.ConfigFile, createdConfig)

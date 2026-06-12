@@ -13,7 +13,7 @@ const (
 
 func (s *Service) handleProviderChat(ctx context.Context, req ChatRequest, runID string, intent router.Intent) (ChatResponse, error) {
 	embedder := s.router.SelectDefaultEmbedder()
-	messages, err := s.context.Messages(ctx, req.SessionID, s.memoryScope(req), req.Message, embedder)
+	messages, err := s.context.Messages(ctx, req.SessionID, s.memoryScope(req), req.AgentID, req.Message, embedder)
 	if err != nil {
 		_ = s.finishRun(ctx, runID, RunStatusFailed, err.Error(), "", "")
 		return ChatResponse{}, err

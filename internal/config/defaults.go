@@ -51,14 +51,19 @@ const (
 
 	DefaultDailyUSDLimit           = 0.25
 	DefaultRequireApprovalAboveUSD = 0.05
+	DefaultMaxTotalAgents          = 20
+	DefaultMaxConcurrentSpawns     = 3
 )
 
 func Default(paths Paths) Config {
 	return Config{
 		Framework: FrameworkConfig{
-			Enabled:         true,
-			DelegateEnabled: true,
-			HooksEnabled:    true,
+			Enabled:             true,
+			DelegateEnabled:     true,
+			HooksEnabled:        true,
+			MaxTotalAgents:      DefaultMaxTotalAgents,
+			MaxConcurrentSpawns: DefaultMaxConcurrentSpawns,
+			AllowAutoCreate:     true,
 		},
 		Server: ServerConfig{
 			Host: DefaultHost,
@@ -115,6 +120,8 @@ func Default(paths Paths) Config {
 				RespondInGroups:    DefaultRespondMentionOrReply,
 				RespondInPrivate:   true,
 				PollTimeoutSeconds: DefaultTelegramPollTimeoutSec,
+				CommandMode:        "slash",
+				CommandPrefix:      "/",
 			},
 		},
 		Providers: []ProviderConfig{
@@ -163,16 +170,17 @@ func Default(paths Paths) Config {
 			DailyUSDLimit:           DefaultDailyUSDLimit,
 			RequireApprovalAboveUSD: DefaultRequireApprovalAboveUSD,
 		},
-		Agents: []AgentProfileConfig{
-			{
-				ID:          DefaultAgentID,
-				Name:        AppName,
-				Language:    DefaultAgentLanguage,
-				Persona:     "",
-				Tools:       []string{},
-				Providers:   []string{},
-				MemoryScope: "",
+		Models: ModelsConfig{
+			Catalog: []CatalogModelConfig{
+				{
+					ID:       "default",
+					Provider: DefaultProviderID,
+					Model:    DefaultProviderModel,
+					Label:    "Default",
+					Enabled:  true,
+				},
 			},
+			DefaultCatalogID: "default",
 		},
 	}
 }

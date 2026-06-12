@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
+	"vietclaw/internal/agentfs"
 	"vietclaw/internal/config"
 	"vietclaw/internal/i18n"
 	"vietclaw/internal/memory"
@@ -21,6 +22,7 @@ type Builder struct {
 	db             *sql.DB
 	mem            *memory.Store
 	router         *router.ModelRouter
+	agents         *agentfs.Registry
 	summarizeGroup singleflight.Group
 }
 
@@ -33,7 +35,12 @@ func (b *Builder) WithRouter(r *router.ModelRouter) *Builder {
 	return b
 }
 
-func (b *Builder) Messages(ctx context.Context, sessionID, userID, userMessage string, embedder providers.Provider) ([]providers.Message, error) {
+func (b *Builder) WithAgentRegistry(registry *agentfs.Registry) *Builder {
+	b.agents = registry
+	return b
+}
+
+func (b *Builder) Messages(ctx context.Context, sessionID, scope, agentID, userMessage string, embedder providers.Provider) ([]providers.Message, error) {
 	maxChars := b.cfg.Agent.MaxContextChars
 	if maxChars <= 0 {
 		maxChars = config.DefaultMaxContextChars
@@ -45,8 +52,21 @@ func (b *Builder) Messages(ctx context.Context, sessionID, userID, userMessage s
 		agentName = config.AppName
 	}
 
+	if agentID != "" && b.agents != nil {
+		if def, ok := b.agents.Get(agentID); ok {
+			if strings.TrimSpace(def.Name) != "" {
+				agentName = def.Name
+			}
+			if strings.TrimSpace(def.Language) != "" {
+				lang = def.Language
+			}
+		}
+	}
+
 	parts := []string{i18n.T(lang, i18n.SystemPromptBase, agentName)}
-	scope := scopeForUser(userID)
+	if scope == "" {
+		scope = scopeForUser("local")
+	}
 	hybrid, _ := b.mem.SearchHybrid(ctx, scope, userMessage, 9, embedder)
 	coreMemories, experiences := splitMemories(hybrid, 6, 3)
 	if len(coreMemories) > 0 || len(experiences) > 0 {
@@ -60,7 +80,13 @@ func (b *Builder) Messages(ctx context.Context, sessionID, userID, userMessage s
 		parts = append(parts, strings.Join(lines, "\n"))
 	}
 
-	loadedSkills, _ := skills.Load(b.cfg.Agent.SkillDirs)
+	var loadedSkills []skills.Skill
+	if b.agents != nil {
+		loadedSkills = b.agents.SkillsFor(agentID)
+	}
+	if len(loadedSkills) == 0 {
+		loadedSkills, _ = skills.Load(b.cfg.Agent.SkillDirs)
+	}
 	matchedSkills := skills.Match(loadedSkills, userMessage, 3)
 	if len(matchedSkills) > 0 {
 		lines := []string{i18n.T(lang, i18n.SystemSkillHeader)}

@@ -7,6 +7,7 @@ export type SettingsNavItem = {
 export const SETTINGS_NAV: SettingsNavItem[] = [
   { to: '/settings', labelKey: 'nav.settingsOverview', exact: true },
   { to: '/settings/providers', labelKey: 'nav.providers' },
+  { to: '/settings/models', labelKey: 'nav.models' },
   { to: '/settings/budget', labelKey: 'nav.budget' },
   { to: '/settings/channels', labelKey: 'nav.channels' },
   { to: '/settings/memory', labelKey: 'nav.memory' },

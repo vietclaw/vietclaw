@@ -48,7 +48,7 @@ func TestHistorySkipsSystemToolLogs(t *testing.T) {
 	}
 
 	builder := contextbuilder.New(cfg, database, memory.NewStore(database))
-	messages, err := builder.Messages(context.Background(), sessionID, "user:local", "hello", nil)
+	messages, err := builder.Messages(context.Background(), sessionID, "user:local", config.DefaultAgentID, "hello", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
