@@ -28,7 +28,8 @@ export function useI18n() {
   }
 
   function toolLabel(toolName: string): string {
-    const normalized = normalizeToolName(toolName)
+    const base = toolName.split(':')[0] ?? toolName
+    const normalized = normalizeToolName(base)
     const key = `tool.ui.${normalized}`
     const label = catalogs[lang.value]?.[key] ?? catalogs.vi[key]
     return label ?? toolName

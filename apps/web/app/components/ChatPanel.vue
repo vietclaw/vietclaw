@@ -2,6 +2,7 @@
 import {
   AlertCircle,
   ArrowUp,
+  Check,
   ChevronDown,
   Square,
   Copy,
@@ -10,7 +11,9 @@ import {
   Globe,
   RefreshCw,
   Search,
+  Settings,
   Terminal,
+  Users,
   Wrench,
 } from '@lucide/vue'
 import katex from 'katex'
@@ -35,19 +38,43 @@ const toast = useToast()
 const chatInput = ref('')
 const chatBox = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const modelMenuRef = ref<HTMLElement | null>(null)
+const modelMenuOpen = ref(false)
 const expandedTools = ref<Set<string>>(new Set())
 const stickToBottom = ref(true)
+
+const selectedModelLabel = computed(() => {
+  const match = catalogModels.value.find(m => m.id === selectedCatalogId.value)
+  return match?.label || match?.id || t('chat.modelDefault')
+})
+
+function pickModel(id: string) {
+  void setSelectedCatalog(id)
+  modelMenuOpen.value = false
+}
+
+function onDocumentClick(event: MouseEvent) {
+  if (!modelMenuOpen.value) return
+  const target = event.target as Node | null
+  if (target && modelMenuRef.value?.contains(target)) return
+  modelMenuOpen.value = false
+}
+
+onMounted(() => document.addEventListener('click', onDocumentClick))
+onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
 const SCROLL_STICK_THRESHOLD = 96
 
 const suggestions = computed(() => [
   { label: t('chat.suggestion.remember.label'), text: t('chat.suggestion.remember.text') },
   { label: t('chat.suggestion.search.label'), text: t('chat.suggestion.search.text') },
+  { label: t('chat.suggestion.spawn.label'), text: t('chat.suggestion.spawn.text') },
+  { label: t('chat.suggestion.createAgent.label'), text: t('chat.suggestion.createAgent.text') },
   { label: t('chat.suggestion.delegate.label'), text: t('chat.suggestion.delegate.text') },
   { label: t('chat.suggestion.workspace.label'), text: t('chat.suggestion.workspace.text') },
 ])
 
-const SUMMARY_KEYS = ['query', 'command', 'cmd', 'path', 'file', 'url', 'name', 'input', 'text', 'pattern', 'expression', 'message', 'prompt']
+const SUMMARY_KEYS = ['query', 'command', 'cmd', 'path', 'file', 'url', 'name', 'input', 'text', 'pattern', 'expression', 'message', 'prompt', 'agent_id']
 
 type ToolGroup = {
   id: string
@@ -82,9 +109,53 @@ function toolRequestSummary(input?: string): string {
   }
 }
 
+type SpawnGroup = {
+  id: string
+  agentId: string
+  status: string
+  summary?: string
+}
+
 type RenderBlock =
   | { type: 'text', text: string }
   | { type: 'tool', group: ToolGroup }
+  | { type: 'spawn', spawn: SpawnGroup }
+
+function upsertSpawnBlock(blocks: RenderBlock[], step: ChatStepEvent, index: number) {
+  const agentId = step.agentId ?? 'agent'
+  const existing = blocks.findIndex(
+    block => block.type === 'spawn' && block.spawn.agentId === agentId,
+  )
+  const next: SpawnGroup = {
+    id: `spawn-${agentId}`,
+    agentId,
+    status: step.spawnStatus ?? 'running',
+    summary: step.spawnSummary,
+  }
+  if (existing >= 0) {
+    const prev = blocks[existing]
+    if (prev?.type === 'spawn') {
+      blocks[existing] = {
+        type: 'spawn',
+        spawn: { ...prev.spawn, ...next },
+      }
+    }
+    return
+  }
+  blocks.push({ type: 'spawn', spawn: next })
+}
+
+function spawnStatusLabel(status: string): string {
+  const key = `chat.spawn.${status}`
+  const label = t(key)
+  return label === key ? status : label
+}
+
+function spawnStatusClass(status: string): string {
+  if (status === 'done') return 'text-vc-success'
+  if (status === 'failed') return 'text-vc-error'
+  return 'text-vc-accent'
+}
 
 function buildToolGroups(steps: ChatStepEvent[]): ToolGroup[] {
   const groups: ToolGroup[] = []
@@ -106,6 +177,13 @@ function buildToolGroups(steps: ChatStepEvent[]): ToolGroup[] {
           result: step.toolResult,
         })
       }
+    } else if (step.type === 'spawn') {
+      groups.push({
+        id: `s-${groups.length}`,
+        toolName: 'agent_spawn',
+        input: JSON.stringify({ agent_id: step.agentId, status: step.spawnStatus }),
+        result: step.spawnSummary,
+      })
     } else if (step.type === 'error') {
       groups.push({ id: `e-${groups.length}`, toolName: 'error', error: step.error })
     }
@@ -179,6 +257,8 @@ function buildRenderBlocks(msg: ChatItem): RenderBlock[] {
           result: step.toolResult,
         },
       })
+    } else if (step.type === 'spawn') {
+      upsertSpawnBlock(blocks, step, i)
     } else if (step.type === 'error') {
       blocks.push({
         type: 'tool',
@@ -191,6 +271,7 @@ function buildRenderBlocks(msg: ChatItem): RenderBlock[] {
 
 function toolIcon(name: string) {
   const n = name.toLowerCase()
+  if (n.includes('agent') || n.startsWith('spawn:')) return Users
   if (n.includes('web') || n.includes('search') || n.includes('fetch') || n.includes('http')) return Globe
   if (n.includes('shell') || n.includes('exec') || n.includes('cmd')) return Terminal
   if (n.includes('file') || n.includes('read') || n.includes('grep')) return FileText
@@ -342,7 +423,7 @@ watch(currentSessionId, () => {
           {{ t('chat.subtitle') }}
         </p>
 
-        <div class="mt-10 grid gap-2.5 sm:grid-cols-2">
+        <div class="mt-10 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           <button
             v-for="(item, i) in suggestions"
             :key="item.label"
@@ -394,7 +475,24 @@ watch(currentSessionId, () => {
                 />
               </div>
 
-              <div v-else class="text-sm leading-relaxed">
+              <div v-else-if="block.type === 'spawn'" class="text-sm leading-relaxed">
+                <div class="flex items-start gap-2 text-vc-text-muted">
+                  <Users :size="14" class="mt-0.5 shrink-0" :stroke-width="1.75" />
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <span class="font-medium text-vc-text-secondary">{{ block.spawn.agentId }}</span>
+                      <span class="text-xs" :class="spawnStatusClass(block.spawn.status)">
+                        {{ spawnStatusLabel(block.spawn.status) }}
+                      </span>
+                    </div>
+                    <p v-if="block.spawn.summary" class="mt-1 text-vc-text-secondary">
+                      {{ truncate(block.spawn.summary, 160) }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else-if="block.type === 'tool'" class="text-sm leading-relaxed">
                 <div v-if="block.group.error" class="flex items-center gap-2 text-vc-error">
                   <AlertCircle :size="14" class="shrink-0" :stroke-width="1.75" />
                   <span>{{ block.group.error }}</span>
@@ -464,20 +562,8 @@ watch(currentSessionId, () => {
     </div>
 
     <div class="shrink-0 px-4 pb-4 pt-2 md:px-8 md:pb-6">
-      <div class="mx-auto max-w-2xl space-y-2">
-        <div v-if="catalogModels.length" class="flex items-center justify-end gap-2 px-1">
-          <span class="text-xs text-vc-text-muted">{{ t('chat.model') }}</span>
-          <select
-            :value="selectedCatalogId"
-            class="vc-input max-w-[220px] py-1 text-xs"
-            @change="setSelectedCatalog(($event.target as HTMLSelectElement).value)"
-          >
-            <option v-for="m in catalogModels" :key="m.id" :value="m.id">
-              {{ m.label || m.id }}
-            </option>
-          </select>
-        </div>
-        <div class="vc-composer flex items-center gap-1 py-2 pl-4 pr-2">
+      <div class="mx-auto max-w-2xl">
+        <div class="vc-composer flex items-end gap-1 py-2 pl-4 pr-2">
           <textarea
             ref="textareaRef"
             v-model="chatInput"
@@ -487,7 +573,52 @@ watch(currentSessionId, () => {
             @input="autoResize($event.target as HTMLTextAreaElement)"
             @keydown="onKeydown"
           />
-          <div class="flex shrink-0 items-center gap-0.5">
+          <div class="flex shrink-0 items-center gap-1 pb-0.5">
+            <div
+              v-if="catalogModels.length"
+              ref="modelMenuRef"
+              class="vc-composer-model"
+            >
+              <button
+                type="button"
+                class="vc-composer-model-btn"
+                :aria-expanded="modelMenuOpen"
+                :aria-label="t('chat.model')"
+                @click.stop="modelMenuOpen = !modelMenuOpen"
+              >
+                <span class="max-w-[7.5rem] truncate">{{ selectedModelLabel }}</span>
+                <ChevronDown
+                  :size="14"
+                  :stroke-width="2"
+                  class="shrink-0 transition-transform duration-200"
+                  :class="{ 'rotate-180': modelMenuOpen }"
+                />
+              </button>
+              <Transition name="vc-model-menu">
+                <div v-if="modelMenuOpen" class="vc-composer-model-menu">
+                  <button
+                    v-for="m in catalogModels"
+                    :key="m.id"
+                    type="button"
+                    class="vc-composer-model-item"
+                    :class="{ 'is-active': m.id === selectedCatalogId }"
+                    @click="pickModel(m.id)"
+                  >
+                    <span class="truncate">{{ m.label || m.id }}</span>
+                    <Check v-if="m.id === selectedCatalogId" :size="14" :stroke-width="2.25" class="shrink-0 opacity-70" />
+                  </button>
+                  <div class="vc-composer-model-divider" />
+                  <NuxtLink
+                    to="/settings/models"
+                    class="vc-composer-model-item vc-composer-model-config"
+                    @click="modelMenuOpen = false"
+                  >
+                    <Settings :size="14" :stroke-width="1.75" class="shrink-0 opacity-60" />
+                    <span>{{ t('chat.modelConfigure') }}</span>
+                  </NuxtLink>
+                </div>
+              </Transition>
+            </div>
             <button
               v-if="messages.length > 0"
               type="button"

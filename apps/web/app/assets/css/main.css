@@ -448,6 +448,87 @@
     transform: scale(0.92);
   }
 
+  .vc-composer-model {
+    position: relative;
+  }
+
+  .vc-composer-model-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    max-width: 9.5rem;
+    padding: 0.4rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    line-height: 1.2;
+    color: var(--color-vc-text-secondary);
+    background: color-mix(in srgb, var(--color-vc-text) 5%, transparent);
+    transition:
+      background-color 0.2s var(--vc-ease),
+      color 0.2s var(--vc-ease);
+  }
+
+  .vc-composer-model-btn:hover {
+    background: color-mix(in srgb, var(--color-vc-text) 9%, transparent);
+    color: var(--color-vc-text);
+  }
+
+  .vc-composer-model-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 0.5rem);
+    z-index: 40;
+    min-width: 12.5rem;
+    padding: 0.35rem;
+    border: 1px solid var(--color-vc-border);
+    border-radius: 0.875rem;
+    background: var(--color-vc-surface);
+    box-shadow: var(--vc-shadow-lg);
+  }
+
+  .vc-composer-model-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    text-align: left;
+    color: var(--color-vc-text-secondary);
+    transition: background-color 0.15s var(--vc-ease), color 0.15s var(--vc-ease);
+  }
+
+  .vc-composer-model-item:hover,
+  .vc-composer-model-item.is-active {
+    background: color-mix(in srgb, var(--color-vc-text) 6%, transparent);
+    color: var(--color-vc-text);
+  }
+
+  .vc-composer-model-config {
+    justify-content: flex-start;
+    color: var(--color-vc-text-muted);
+  }
+
+  .vc-composer-model-divider {
+    margin: 0.25rem 0.35rem;
+    border-top: 1px solid var(--color-vc-border-subtle);
+  }
+
+  .vc-model-menu-enter-active,
+  .vc-model-menu-leave-active {
+    transition:
+      opacity 0.15s var(--vc-ease),
+      transform 0.15s var(--vc-ease);
+  }
+
+  .vc-model-menu-enter-from,
+  .vc-model-menu-leave-to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
   /* ---- Links ---- */
   .vc-link {
     color: var(--color-vc-text-secondary);
