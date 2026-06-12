@@ -1,5 +1,6 @@
 <script setup lang="ts">
-definePageMeta({ title: 'Cài đặt' })
+const { t } = useI18n()
+useHead({ title: () => `${t('settings.overview.title')} · VietClaw` })
 </script>
 
 <template>

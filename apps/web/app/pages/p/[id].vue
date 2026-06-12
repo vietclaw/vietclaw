@@ -1,5 +1,6 @@
 <script setup lang="ts">
-definePageMeta({ title: 'Chat' })
+const { t } = useI18n()
+useHead({ title: () => `${t('chat.title')} · VietClaw` })
 
 const route = useRoute()
 const { sessions, switchSession, createSession } = useChat()

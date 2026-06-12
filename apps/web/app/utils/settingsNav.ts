@@ -1,16 +1,16 @@
 export type SettingsNavItem = {
   to: string
-  label: string
+  labelKey: string
   exact?: boolean
 }
 
 export const SETTINGS_NAV: SettingsNavItem[] = [
-  { to: '/settings', label: 'Tổng quan', exact: true },
-  { to: '/settings/providers', label: 'Providers' },
-  { to: '/settings/budget', label: 'Budget' },
-  { to: '/settings/channels', label: 'Kênh' },
-  { to: '/settings/memory', label: 'Memory' },
-  { to: '/settings/logs', label: 'Logs' },
+  { to: '/settings', labelKey: 'nav.settingsOverview', exact: true },
+  { to: '/settings/providers', labelKey: 'nav.providers' },
+  { to: '/settings/budget', labelKey: 'nav.budget' },
+  { to: '/settings/channels', labelKey: 'nav.channels' },
+  { to: '/settings/memory', labelKey: 'nav.memory' },
+  { to: '/settings/logs', labelKey: 'nav.logs' },
 ]
 
 export function isSettingsNavActive(path: string, item: SettingsNavItem) {

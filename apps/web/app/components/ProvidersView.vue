@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { apiFetch } from '~/utils/api'
 
-const props = defineProps<{ embedded?: boolean }>()
+defineProps<{ embedded?: boolean }>()
 
 const toast = useToast()
 const { config } = useSettings()
+const { t } = useI18n()
 const modelLists = ref<Record<string, string[]>>({})
 const loadingModels = ref<Record<string, boolean>>({})
 
@@ -15,7 +16,7 @@ async function fetchModels(providerId: string) {
     const res = await apiFetch<{ models: string[] }>(`/api/providers/${providerId}/models`)
     modelLists.value[providerId] = res.models || []
   } catch {
-    toast.add('Không lấy được danh sách model', 'error')
+    toast.add(t('providers.fetchModelsFailed'), 'error')
   } finally {
     loadingModels.value[providerId] = false
   }
@@ -25,31 +26,32 @@ async function fetchModels(providerId: string) {
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="text-lg font-semibold tracking-tight text-vc-text">Providers</h1>
-      <p v-if="config" class="mt-1 text-sm text-vc-text-muted">{{ config.providers.length }} provider trong config</p>
+      <h1 class="vc-display text-2xl font-medium text-vc-text">{{ t('providers.title') }}</h1>
+      <p v-if="config" class="mt-1.5 text-sm text-vc-text-muted">{{ t('providers.count', config.providers.length) }}</p>
     </div>
 
     <div v-if="config" class="space-y-3">
       <div
         v-for="p in config.providers"
         :key="p.id"
-        class="rounded-lg border border-vc-border bg-vc-surface p-4"
+        class="vc-card p-5 transition-shadow duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:shadow-[var(--vc-shadow-md)]"
       >
         <div class="flex items-center justify-between gap-3">
-          <div>
-            <span class="text-sm font-medium text-vc-text">{{ p.id }}</span>
-            <span class="ml-2 text-xs font-mono text-vc-text-muted">{{ p.type }}</span>
+          <div class="flex items-center gap-2">
+            <span class="vc-status-dot" :class="p.enabled ? 'vc-status-dot--on' : 'vc-status-dot--off'" aria-hidden="true" />
+            <span class="text-sm font-semibold text-vc-text">{{ p.id }}</span>
+            <span class="rounded-md bg-vc-bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-vc-text-muted">{{ p.type }}</span>
           </div>
-          <VcToggle v-model="p.enabled" label="Bật" />
+          <VcToggle v-model="p.enabled" :label="t('common.enable')" />
         </div>
-        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        <div class="mt-4 grid gap-3 border-t border-vc-border-subtle pt-4 sm:grid-cols-2">
           <div>
-            <span class="mb-1 block text-xs text-vc-text-muted">Model</span>
+            <span class="mb-1.5 block text-xs font-medium text-vc-text-secondary">{{ t('providers.model') }}</span>
             <div class="flex gap-2">
               <select
                 v-if="modelLists[p.id]?.length"
                 v-model="p.default_model"
-                class="flex-1 rounded-md border border-vc-border bg-vc-bg px-2 py-1.5 text-xs font-mono text-vc-text"
+                class="vc-input vc-input--mono flex-1"
               >
                 <option v-for="m in modelLists[p.id]" :key="m" :value="m">{{ m }}</option>
               </select>
@@ -57,32 +59,32 @@ async function fetchModels(providerId: string) {
                 v-else
                 v-model="p.default_model"
                 type="text"
-                class="flex-1 rounded-md border border-vc-border bg-vc-bg px-2 py-1.5 text-xs font-mono text-vc-text"
+                class="vc-input vc-input--mono flex-1"
               />
               <button
                 type="button"
-                class="vc-btn vc-btn-ghost text-xs"
+                class="vc-btn vc-btn-ghost shrink-0 text-xs"
                 :disabled="loadingModels[p.id]"
                 @click="fetchModels(p.id)"
               >
-                {{ loadingModels[p.id] ? '…' : 'models' }}
+                {{ loadingModels[p.id] ? '…' : t('common.models') }}
               </button>
             </div>
           </div>
           <div>
-            <span class="mb-1 block text-xs text-vc-text-muted">API key env</span>
+            <span class="mb-1.5 block text-xs font-medium text-vc-text-secondary">{{ t('providers.apiKeyEnv') }}</span>
             <input
               v-model="p.api_key_env"
               type="text"
-              class="w-full rounded-md border border-vc-border bg-vc-bg px-2 py-1.5 text-xs font-mono text-vc-text"
+              class="vc-input vc-input--mono"
             />
           </div>
           <div class="sm:col-span-2">
-            <span class="mb-1 block text-xs text-vc-text-muted">Base URL</span>
+            <span class="mb-1.5 block text-xs font-medium text-vc-text-secondary">{{ t('providers.baseUrl') }}</span>
             <input
               v-model="p.base_url"
               type="text"
-              class="w-full rounded-md border border-vc-border bg-vc-bg px-2 py-1.5 text-xs font-mono text-vc-text"
+              class="vc-input vc-input--mono"
             />
           </div>
         </div>

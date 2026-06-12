@@ -1,7 +1,8 @@
 import vi from '../../locales/vi.json'
 import en from '../../locales/en.json'
+import type { OptionGroup } from '~/utils/configOptions'
 
-type Locale = 'vi' | 'en'
+export type Locale = 'vi' | 'en'
 type Catalog = Record<string, string>
 
 const catalogs: Record<Locale, Catalog> = { vi, en }
@@ -16,7 +17,14 @@ export function useI18n() {
   function t(key: string, ...args: unknown[]): string {
     const template = catalogs[lang.value]?.[key] ?? catalogs.vi[key] ?? key
     if (args.length === 0) return template
-    return template.replace(/%s/g, () => String(args.shift()))
+    let i = 0
+    return template.replace(/%s/g, () => String(args[i++]))
+  }
+
+  function option(group: OptionGroup, value: string): string {
+    const key = `option.${group}.${value}`
+    const label = catalogs[lang.value]?.[key] ?? catalogs.vi[key]
+    return label ?? value
   }
 
   function toolLabel(toolName: string): string {
@@ -26,9 +34,16 @@ export function useI18n() {
     return label ?? toolName
   }
 
+  function channelStatus(channel: { running?: boolean; enabled?: boolean } | undefined): string {
+    if (!channel) return t('status.off')
+    if (channel.running) return t('status.running')
+    if (channel.enabled) return t('status.enabled')
+    return t('status.off')
+  }
+
   function setLanguage(next: Locale) {
     lang.value = next
   }
 
-  return { lang, t, toolLabel, setLanguage }
+  return { lang, t, option, toolLabel, channelStatus, setLanguage }
 }

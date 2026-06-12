@@ -18,7 +18,7 @@ import { marked } from 'marked'
 import type { ChatItem, ChatStepEvent } from '~/composables/useChat'
 import { enhanceCodeBlocks } from '~/utils/enhanceCodeBlocks'
 
-const { currentSession, currentSessionId, isGenerating, sendMessage, clearSessionMessages } = useChat()
+const { currentSession, currentSessionId, isGenerating, sendMessage, clearSessionMessages, stopGeneration } = useChat()
 const { t, toolLabel } = useI18n()
 const toast = useToast()
 
@@ -30,12 +30,12 @@ const stickToBottom = ref(true)
 
 const SCROLL_STICK_THRESHOLD = 96
 
-const suggestions = [
-  { label: 'Nhớ sở thích', text: 'Nhớ giúp t: t thích deploy bằng Docker và tiết kiệm token' },
-  { label: 'Tìm web', text: 'Tìm trên web VPS rẻ ở Việt Nam, tóm tắt 3 lựa chọn' },
-  { label: 'Ủy researcher', text: '@researcher so sánh Redis và SQLite cho app chat nhỏ' },
-  { label: 'Đọc workspace', text: 'Đọc README trong workspace và cho t biết project làm gì' },
-]
+const suggestions = computed(() => [
+  { label: t('chat.suggestion.remember.label'), text: t('chat.suggestion.remember.text') },
+  { label: t('chat.suggestion.search.label'), text: t('chat.suggestion.search.text') },
+  { label: t('chat.suggestion.delegate.label'), text: t('chat.suggestion.delegate.text') },
+  { label: t('chat.suggestion.workspace.label'), text: t('chat.suggestion.workspace.text') },
+])
 
 const SUMMARY_KEYS = ['query', 'command', 'cmd', 'path', 'file', 'url', 'name', 'input', 'text', 'pattern', 'expression', 'message', 'prompt']
 
@@ -145,6 +145,7 @@ function buildRenderBlocks(msg: ChatItem): RenderBlock[] {
   const blocks: RenderBlock[] = []
   for (let i = 0; i < msg.steps.length; i++) {
     const step = msg.steps[i]
+    if (!step) continue
     if (step.type === 'text' && step.text) {
       blocks.push({ type: 'text', text: step.text })
     } else if (step.type === 'tool_call') {
@@ -322,32 +323,38 @@ watch(currentSessionId, () => {
     <div ref="chatBox" class="min-h-0 flex-1 overflow-y-auto vc-scrollbar" @scroll="onChatScroll">
       <div
         v-if="messages.length === 0"
-        class="mx-auto max-w-2xl px-4 pt-12 pb-8 md:px-8 md:pt-16"
+        class="mx-auto flex h-full max-w-2xl flex-col justify-center px-5 pb-16 md:px-8"
       >
-        <p class="text-lg font-semibold tracking-tight text-vc-text">
-          Xin chào.
+        <p class="vc-display vc-fade-up text-3xl font-medium text-vc-text md:text-4xl" style="text-wrap: balance">
+          {{ t('chat.greeting').slice(0, -1) }}<span class="text-vc-accent">.</span>
         </p>
-        <p class="mt-2 max-w-md text-[15px] text-vc-text-secondary">
-          Gõ bất cứ gì. Agent sẽ nhớ, tìm, chạy lệnh hoặc ủy việc khi cần.
+        <p class="vc-fade-up vc-fade-up-1 mt-3 max-w-md text-[15px] leading-relaxed text-vc-text-secondary">
+          {{ t('chat.subtitle') }}
         </p>
 
-        <ul class="mt-8 space-y-1 border-t border-vc-border-subtle pt-6">
-          <li v-for="item in suggestions" :key="item.label">
-            <button
-              type="button"
-              class="w-full rounded-md px-2 py-2.5 text-left text-sm text-vc-text-secondary transition-colors hover:bg-vc-bg-subtle hover:text-vc-text"
-              @click="applySuggestion(item.text)"
-            >
+        <div class="mt-10 grid gap-2.5 sm:grid-cols-2">
+          <button
+            v-for="(item, i) in suggestions"
+            :key="item.label"
+            type="button"
+            class="vc-fade-up group rounded-2xl border border-vc-border-subtle bg-vc-surface p-4 text-left transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 hover:border-vc-border hover:shadow-[var(--vc-shadow-md)] active:scale-[0.98]"
+            :class="`vc-fade-up-${i + 1}`"
+            @click="applySuggestion(item.text)"
+          >
+            <span class="vc-eyebrow block transition-colors duration-300 group-hover:text-vc-accent">
+              {{ item.label }}
+            </span>
+            <span class="mt-1.5 block text-sm leading-relaxed text-vc-text-secondary transition-colors duration-300 group-hover:text-vc-text">
               {{ item.text }}
-            </button>
-          </li>
-        </ul>
+            </span>
+          </button>
+        </div>
       </div>
 
-      <div class="mx-auto max-w-2xl space-y-10 px-4 py-6 md:px-8">
+      <div v-else class="mx-auto max-w-2xl space-y-10 px-4 py-6 md:px-8">
         <template v-for="(msg, idx) in messages" :key="idx">
           <div v-if="msg.role === 'user'" class="flex justify-end">
-            <div class="max-w-[85%] rounded-xl bg-vc-user px-4 py-2.5 text-[15px] leading-relaxed text-vc-text">
+            <div class="max-w-[85%] rounded-2xl rounded-br-md bg-vc-user px-4 py-2.5 text-[15px] leading-relaxed text-vc-text shadow-[var(--vc-shadow-sm)]">
               <p class="whitespace-pre-wrap">{{ msg.text }}</p>
             </div>
           </div>
@@ -355,8 +362,9 @@ watch(currentSessionId, () => {
           <div v-else class="space-y-3">
             <p
               v-if="isStreamingMessage(idx) && messageBlocks(msg).length === 0"
-              class="text-sm text-vc-text-muted"
+              class="flex items-center gap-2.5 text-sm text-vc-text-muted"
             >
+              <span class="vc-thinking" aria-hidden="true"><span /><span /><span /></span>
               {{ t('chat.thinking') }}
             </p>
 
@@ -409,7 +417,7 @@ watch(currentSessionId, () => {
                     </button>
                     <div
                       v-if="isToolExpanded(idx, block.group.id)"
-                      class="mt-2 space-y-3 border-l-2 border-vc-border-subtle pl-3"
+                      class="mt-2 space-y-3 border-l-2 border-vc-accent/30 pl-3"
                     >
                       <ToolDetailBody
                         v-if="block.group.input"
@@ -447,12 +455,12 @@ watch(currentSessionId, () => {
 
     <div class="shrink-0 px-4 pb-4 pt-2 md:px-8 md:pb-6">
       <div class="mx-auto max-w-2xl">
-        <div class="vc-composer flex items-center gap-1 pl-3 pr-1.5 py-1.5">
+        <div class="vc-composer flex items-center gap-1 py-2 pl-4 pr-2">
           <textarea
             ref="textareaRef"
             v-model="chatInput"
             rows="1"
-            placeholder="Nhắn tin nhắn..."
+            :placeholder="t('chat.placeholder')"
             class="vc-composer-input max-h-32 min-h-[36px] flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-snug text-vc-text placeholder:text-vc-text-muted focus:outline-none"
             @input="autoResize($event.target as HTMLTextAreaElement)"
             @keydown="onKeydown"
@@ -462,7 +470,7 @@ watch(currentSessionId, () => {
               v-if="messages.length > 0"
               type="button"
               class="vc-composer-btn"
-              title="Xóa tin nhắn trong phiên"
+              :title="t('chat.clearSession')"
               @click="clearSessionMessages()"
             >
               <RefreshCw :size="15" :stroke-width="1.75" />

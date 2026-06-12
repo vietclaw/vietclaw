@@ -19,12 +19,13 @@ export function useSettings() {
 
   async function load() {
     loading.value = true
+    const { t } = useI18n()
     const toast = useToast()
     try {
       const cfg = await apiFetch<VietClawConfig>('/api/settings')
       applyLoaded(cfg)
     } catch (err) {
-      toast.add(err instanceof Error ? err.message : 'Không tải được cấu hình', 'error')
+      toast.add(err instanceof Error ? err.message : t('toast.configLoadFailed'), 'error')
     } finally {
       loading.value = false
     }
@@ -33,6 +34,7 @@ export function useSettings() {
   async function save(): Promise<boolean> {
     if (!config.value) return false
     saving.value = true
+    const { t } = useI18n()
     const toast = useToast()
     try {
       const res = await apiFetch<SettingsPutResponse>('/api/settings', {
@@ -40,10 +42,10 @@ export function useSettings() {
         body: JSON.stringify(config.value)
       })
       applyLoaded(res.config)
-      toast.add('Đã lưu cấu hình', 'success')
+      toast.add(t('toast.configSaved'), 'success')
       return true
     } catch (err) {
-      toast.add(err instanceof Error ? err.message : 'Lưu cấu hình thất bại', 'error')
+      toast.add(err instanceof Error ? err.message : t('toast.configSaveFailed'), 'error')
       return false
     } finally {
       saving.value = false
@@ -52,14 +54,15 @@ export function useSettings() {
 
   async function reload(): Promise<boolean> {
     saving.value = true
+    const { t } = useI18n()
     const toast = useToast()
     try {
       const res = await apiFetch<SettingsPutResponse>('/api/settings/reload', { method: 'POST' })
       applyLoaded(res.config)
-      toast.add('Đã tải lại từ config.json', 'success')
+      toast.add(t('toast.configReloaded'), 'success')
       return true
     } catch (err) {
-      toast.add(err instanceof Error ? err.message : 'Tải lại thất bại', 'error')
+      toast.add(err instanceof Error ? err.message : t('toast.configReloadFailed'), 'error')
       return false
     } finally {
       saving.value = false

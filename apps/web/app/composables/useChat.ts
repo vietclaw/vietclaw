@@ -124,7 +124,7 @@ function deleteSession(id: string) {
   sessions.value = sessions.value.filter(s => s.id !== id)
   if (wasCurrent) {
     if (sessions.value.length > 0) {
-      currentSessionId.value = sessions.value[0].id
+      currentSessionId.value = sessions.value[0]?.id ?? ''
       if (import.meta.client) {
         void navigateTo(sessionPath(currentSessionId.value), { replace: true })
       }

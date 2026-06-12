@@ -4,6 +4,7 @@ import { Menu } from '@lucide/vue'
 const route = useRoute()
 const mobileOpen = useState('sidebarMobileOpen', () => false)
 const isSettings = computed(() => route.path.startsWith('/settings'))
+const { t } = useI18n()
 
 watch(() => route.path, () => {
   mobileOpen.value = false
@@ -12,11 +13,12 @@ watch(() => route.path, () => {
 
 <template>
   <div class="vc-app-frame flex w-full max-w-full overflow-hidden bg-vc-bg">
+    <div class="vc-grain" aria-hidden="true" />
     <Teleport to="body">
       <Transition name="fade">
         <div
           v-if="mobileOpen"
-          class="fixed inset-0 z-40 bg-vc-text/15 md:hidden"
+          class="fixed inset-0 z-40 bg-vc-text/20 backdrop-blur-sm md:hidden"
           @click="mobileOpen = false"
         />
       </Transition>
@@ -35,12 +37,12 @@ watch(() => route.path, () => {
       >
         <button
           type="button"
-          class="vc-btn-ghost rounded-md p-1.5"
+          class="vc-btn-ghost rounded-full p-1.5"
           @click="mobileOpen = true"
         >
-          <Menu :size="18" :stroke-width="1.75" />
+          <Menu :size="18" :stroke-width="1.5" />
         </button>
-        <span class="ml-2 text-sm font-medium text-vc-text">Cài đặt</span>
+        <span class="ml-2 text-sm font-medium text-vc-text">{{ t('nav.settings') }}</span>
       </div>
       <div class="min-h-0 flex-1 overflow-hidden">
         <slot />
@@ -56,7 +58,7 @@ watch(() => route.path, () => {
 <style scoped>
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.18s ease;
+  transition: opacity 0.3s var(--vc-ease);
 }
 .fade-enter-from,
 .fade-leave-to {

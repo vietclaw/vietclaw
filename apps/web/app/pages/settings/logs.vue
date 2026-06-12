@@ -1,5 +1,6 @@
 <script setup lang="ts">
-definePageMeta({ title: 'Logs' })
+const { t } = useI18n()
+useHead({ title: () => `${t('nav.logs')} · VietClaw` })
 </script>
 
 <template>

@@ -8,10 +8,11 @@ defineProps<{ embedded?: boolean }>()
 
 const toast = useToast()
 const { config } = useSettings()
+const { t, channelStatus } = useI18n()
 const runtime = ref<ChannelStatus[]>([])
 const envTests = ref<Record<string, ChannelEnvTest>>({})
 
-const fieldClass = 'w-full rounded-md border border-vc-border bg-vc-bg px-2 py-1.5 text-xs font-mono text-vc-text focus:border-vc-accent focus:outline-none'
+const fieldClass = 'vc-input vc-input--mono'
 
 function runtimeFor(name: string): ChannelStatus | undefined {
   return runtime.value.find(c => c.name === name)
@@ -38,12 +39,12 @@ async function testToken(channel: 'discord' | 'telegram') {
     const res = await apiFetch<ChannelEnvTest>(`/api/channels/${channel}/test`, { method: 'POST' })
     envTests.value[channel] = res
     if (!res.env_found) {
-      toast.add(`Biến môi trường ${res.token_env} chưa được set`, 'error')
+      toast.add(t('channels.envNotSet', res.token_env), 'error')
     } else {
-      toast.add('Token env OK', 'success')
+      toast.add(t('status.envOk'), 'success')
     }
   } catch (err) {
-    toast.add(err instanceof Error ? err.message : 'Test thất bại', 'error')
+    toast.add(err instanceof Error ? err.message : t('channels.testFailed'), 'error')
   }
 }
 
@@ -55,24 +56,24 @@ onMounted(() => {
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="text-lg font-semibold tracking-tight text-vc-text">Kênh</h1>
-      <p class="mt-1 text-sm text-vc-text-muted">Discord, Telegram và file đính kèm</p>
+      <h1 class="vc-display text-2xl font-medium text-vc-text">{{ t('channels.title') }}</h1>
+      <p class="mt-1.5 text-sm text-vc-text-muted">{{ t('channels.subtitle') }}</p>
     </div>
 
     <div v-if="config" class="space-y-3">
-      <section class="rounded-lg border border-vc-border bg-vc-surface p-4">
+      <section class="vc-card p-5">
         <div class="flex items-center justify-between gap-3">
           <div>
-            <h2 class="text-sm font-medium text-vc-text">Discord</h2>
+            <h2 class="text-sm font-medium text-vc-text">{{ t('channels.discord') }}</h2>
             <p v-if="runtimeFor('discord')" class="text-xs text-vc-text-muted">
-              {{ runtimeFor('discord')?.running ? 'running' : runtimeFor('discord')?.enabled ? 'enabled' : 'off' }}
+              {{ channelStatus(runtimeFor('discord')) }}
             </p>
           </div>
-          <VcToggle v-model="config.channels.discord.enabled" label="Bật" />
+          <VcToggle v-model="config.channels.discord.enabled" :label="t('common.enable')" />
         </div>
         <div class="mt-3 space-y-3 border-t border-vc-border-subtle pt-3">
           <div>
-            <label class="mb-1 block text-xs text-vc-text-muted">Token env</label>
+            <label class="mb-1 block text-xs text-vc-text-muted">{{ t('channels.tokenEnv') }}</label>
             <input
               v-model="config.channels.discord.token_env"
               type="text"
@@ -81,7 +82,7 @@ onMounted(() => {
             />
           </div>
           <div>
-            <label class="mb-1 block text-xs text-vc-text-muted">Allowed guilds (id, phẩy)</label>
+            <label class="mb-1 block text-xs text-vc-text-muted">{{ t('channels.allowedGuilds') }}</label>
             <input
               :value="listToText(config.channels.discord.allowed_guilds)"
               type="text"
@@ -89,12 +90,12 @@ onMounted(() => {
               @input="config.channels.discord.allowed_guilds = textToList(($event.target as HTMLInputElement).value)"
             />
           </div>
-          <VcToggle v-model="config.channels.discord.respond_in_dm" label="Respond in DM" size="sm" />
-          <button type="button" class="vc-btn vc-btn-ghost text-xs" @click="testToken('discord')">
-            Kiểm tra token
+          <VcToggle v-model="config.channels.discord.respond_in_dm" :label="t('channels.respondInDm')" size="sm" />
+          <button type="button" class="vc-btn vc-btn-outline text-xs" @click="testToken('discord')">
+            {{ t('channels.testToken') }}
           </button>
           <p v-if="envTests.discord" class="text-xs" :class="envTests.discord.env_found ? 'text-vc-success' : 'text-vc-error'">
-            {{ envTests.discord.env_found ? 'env OK' : 'env missing' }}
+            {{ envTests.discord.env_found ? t('status.envOk') : t('status.envMissing') }}
           </p>
           <div v-if="runtimeFor('discord')?.error" class="flex gap-2 text-xs text-vc-error">
             <AlertCircle :size="14" class="shrink-0" />
@@ -103,19 +104,19 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="rounded-lg border border-vc-border bg-vc-surface p-4">
+      <section class="vc-card p-5">
         <div class="flex items-center justify-between gap-3">
           <div>
-            <h2 class="text-sm font-medium text-vc-text">Telegram</h2>
+            <h2 class="text-sm font-medium text-vc-text">{{ t('channels.telegram') }}</h2>
             <p v-if="runtimeFor('telegram')" class="text-xs text-vc-text-muted">
-              {{ runtimeFor('telegram')?.running ? 'running' : runtimeFor('telegram')?.enabled ? 'enabled' : 'off' }}
+              {{ channelStatus(runtimeFor('telegram')) }}
             </p>
           </div>
-          <VcToggle v-model="config.channels.telegram.enabled" label="Bật" />
+          <VcToggle v-model="config.channels.telegram.enabled" :label="t('common.enable')" />
         </div>
         <div class="mt-3 space-y-3 border-t border-vc-border-subtle pt-3">
           <div>
-            <label class="mb-1 block text-xs text-vc-text-muted">Token env</label>
+            <label class="mb-1 block text-xs text-vc-text-muted">{{ t('channels.tokenEnv') }}</label>
             <input
               v-model="config.channels.telegram.token_env"
               type="text"
@@ -124,7 +125,7 @@ onMounted(() => {
             />
           </div>
           <div>
-            <label class="mb-1 block text-xs text-vc-text-muted">Allowed chats (id, phẩy)</label>
+            <label class="mb-1 block text-xs text-vc-text-muted">{{ t('channels.allowedChats') }}</label>
             <input
               :value="listToText(config.channels.telegram.allowed_chats)"
               type="text"
@@ -132,29 +133,29 @@ onMounted(() => {
               @input="config.channels.telegram.allowed_chats = textToList(($event.target as HTMLInputElement).value)"
             />
           </div>
-          <VcToggle v-model="config.channels.telegram.respond_in_private" label="Respond in private" size="sm" />
-          <button type="button" class="vc-btn vc-btn-ghost text-xs" @click="testToken('telegram')">
-            Kiểm tra token
+          <VcToggle v-model="config.channels.telegram.respond_in_private" :label="t('channels.respondInPrivate')" size="sm" />
+          <button type="button" class="vc-btn vc-btn-outline text-xs" @click="testToken('telegram')">
+            {{ t('channels.testToken') }}
           </button>
           <p v-if="envTests.telegram" class="text-xs" :class="envTests.telegram.env_found ? 'text-vc-success' : 'text-vc-error'">
-            {{ envTests.telegram.env_found ? 'env OK' : 'env missing' }}
+            {{ envTests.telegram.env_found ? t('status.envOk') : t('status.envMissing') }}
           </p>
         </div>
       </section>
 
-      <section class="rounded-lg border border-vc-border bg-vc-surface p-4">
+      <section class="vc-card p-5">
         <div class="flex items-center justify-between gap-3">
-          <h2 class="text-sm font-medium text-vc-text">File đính kèm</h2>
-          <VcToggle v-model="config.channels.attachments.enabled" label="Bật" />
+          <h2 class="text-sm font-medium text-vc-text">{{ t('channels.attachments') }}</h2>
+          <VcToggle v-model="config.channels.attachments.enabled" :label="t('common.enable')" />
         </div>
         <div class="mt-3 grid grid-cols-2 gap-3 border-t border-vc-border-subtle pt-3">
           <div>
-            <label class="mb-1 block text-xs text-vc-text-muted">max files</label>
-            <input v-model.number="config.channels.attachments.max_files" type="number" min="0" class="w-full rounded-md border border-vc-border bg-vc-bg px-2 py-1.5 text-xs font-mono" />
+            <label class="mb-1 block text-xs text-vc-text-muted">{{ t('channels.maxFiles') }}</label>
+            <input v-model.number="config.channels.attachments.max_files" type="number" min="0" class="vc-input vc-input--mono" />
           </div>
           <div>
-            <label class="mb-1 block text-xs text-vc-text-muted">max bytes</label>
-            <input v-model.number="config.channels.attachments.max_bytes" type="number" min="0" class="w-full rounded-md border border-vc-border bg-vc-bg px-2 py-1.5 text-xs font-mono" />
+            <label class="mb-1 block text-xs text-vc-text-muted">{{ t('channels.maxBytes') }}</label>
+            <input v-model.number="config.channels.attachments.max_bytes" type="number" min="0" class="vc-input vc-input--mono" />
           </div>
         </div>
       </section>
