@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"vietclaw/internal/config"
@@ -77,5 +78,32 @@ func TestHTTPToolsRespectNetworkPolicy(t *testing.T) {
 	}
 	if _, err := registry.Execute(context.Background(), "web_fetch", `{"url":"http://127.0.0.1"}`); err == nil {
 		t.Fatal("expected web_fetch to reject localhost")
+	}
+}
+
+func TestShellNetworkPolicyBlocksIPBypass(t *testing.T) {
+	cfg := config.Default(config.Paths{DataDir: t.TempDir()})
+	cfg.Tools.Shell.Enabled = true
+	cfg.Tools.Shell.NetworkPolicy.Enabled = true
+	cfg.Tools.Shell.NetworkPolicy.DenyPrivate = true
+	policy := tools.NewPolicy(cfg)
+
+	// These should all resolve to 127.0.0.1 and be blocked
+	bypassAttempts := []string{
+		"curl 2130706433",       // Integer
+		"curl 0x7f000001",       // Hex
+		"curl 0177.0.0.1",       // Octal
+		"curl 127.1",            // Shorthand
+		"curl 127.0.1",          // Shorthand
+		"curl 0177.000.000.001", // Octal with leading zeros
+	}
+
+	for _, cmd := range bypassAttempts {
+		err := policy.ShellNetworkAllowed(cmd)
+		if err == nil {
+			t.Errorf("expected bypass attempt %q to be blocked, but it was allowed", cmd)
+		} else if !strings.Contains(err.Error(), "blocked shell network IP") && !strings.Contains(err.Error(), "blocked shell network host") {
+			t.Errorf("expected bypass attempt %q to be blocked due to network IP policy, got err: %v", cmd, err)
+		}
 	}
 }
