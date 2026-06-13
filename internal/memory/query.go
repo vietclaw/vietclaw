@@ -113,9 +113,20 @@ WHERE embedding IS NOT NULL`
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(records, func(i, j int) bool {
-		return CosineSimilarity(queryEmb, records[i].Embedding) > CosineSimilarity(queryEmb, records[j].Embedding)
+	type scoredRecord struct {
+		record Record
+		score  float32
+	}
+	scored := make([]scoredRecord, len(records))
+	for i, rec := range records {
+		scored[i] = scoredRecord{record: rec, score: CosineSimilarity(queryEmb, rec.Embedding)}
+	}
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].score > scored[j].score
 	})
+	for i := range scored {
+		records[i] = scored[i].record
+	}
 	return records, nil
 }
 
