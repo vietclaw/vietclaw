@@ -3,6 +3,7 @@ package memory_test
 import (
 	"context"
 	"path/filepath"
+	"math"
 	"testing"
 
 	"vietclaw/internal/db"
@@ -10,16 +11,56 @@ import (
 )
 
 func TestVectorConvert(t *testing.T) {
-	slice := []float32{1.0, -2.5, 3.14}
-	data := memory.Float32SliceToBytes(slice)
-	restored := memory.BytesToFloat32Slice(data)
-
-	if len(restored) != len(slice) {
-		t.Fatalf("expected len %d, got %d", len(slice), len(restored))
+	tests := []struct {
+		name  string
+		slice []float32
+	}{
+		{"regular values", []float32{1.0, -2.5, 3.14, 0.0}},
+		{"empty slice", []float32{}},
+		{"nil slice", nil},
+		{"special float values", []float32{float32(math.NaN()), float32(math.Inf(1)), float32(math.Inf(-1))}},
+		{"large slice", make([]float32, 1000)}, // Large slice of 0s
 	}
-	for i := range slice {
-		if slice[i] != restored[i] {
-			t.Errorf("expected %f, got %f", slice[i], restored[i])
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			data := memory.Float32SliceToBytes(tc.slice)
+			restored := memory.BytesToFloat32Slice(data)
+
+			if len(tc.slice) == 0 {
+				if len(restored) != 0 {
+					t.Fatalf("expected empty/nil slice, got len %d", len(restored))
+				}
+				return
+			}
+
+			if len(restored) != len(tc.slice) {
+				t.Fatalf("expected len %d, got %d", len(tc.slice), len(restored))
+			}
+
+			for i := range tc.slice {
+				if math.IsNaN(float64(tc.slice[i])) {
+					if !math.IsNaN(float64(restored[i])) {
+						t.Errorf("expected NaN at index %d, got %f", i, restored[i])
+					}
+				} else if tc.slice[i] != restored[i] {
+					t.Errorf("expected %f at index %d, got %f", tc.slice[i], i, restored[i])
+				}
+			}
+		})
+	}
+}
+
+func TestBytesToFloat32Slice_InvalidLength(t *testing.T) {
+	tests := [][]byte{
+		{1, 2, 3},       // length 3
+		{1, 2, 3, 4, 5}, // length 5
+	}
+
+	for _, buf := range tests {
+		result := memory.BytesToFloat32Slice(buf)
+		if result != nil {
+			t.Errorf("expected nil for buffer of length %d, got slice of length %d", len(buf), len(result))
 		}
 	}
 }
