@@ -13,6 +13,13 @@ import (
 	"time"
 )
 
+var (
+	reScript = regexp.MustCompile(`(?s)<script[^>]*>.*?</script>`)
+	reStyle  = regexp.MustCompile(`(?s)<style[^>]*>.*?</style>`)
+	reTags   = regexp.MustCompile(`<[^>]*>`)
+	reSpaces = regexp.MustCompile(`\s+`)
+)
+
 // WebSearch searches the web using DuckDuckGo HTML search.
 type WebSearch struct{}
 
@@ -221,25 +228,21 @@ func (t WebFetch) Run(ctx context.Context, input string) (string, error) {
 
 func StripHTML(htmlContent string) string {
 	// Strip script tags and their content
-	reScript := regexp.MustCompile(`(?s)<script[^>]*>.*?</script>`)
 	htmlContent = reScript.ReplaceAllString(htmlContent, "")
 
 	// Strip style tags and their content
-	reStyle := regexp.MustCompile(`(?s)<style[^>]*>.*?</style>`)
 	htmlContent = reStyle.ReplaceAllString(htmlContent, "")
 
 	// Strip all other HTML tags
-	reTags := regexp.MustCompile(`<[^>]*>`)
 	text := reTags.ReplaceAllString(htmlContent, " ")
 
 	// Normalize whitespace
 	lines := strings.Split(text, "\n")
-	var cleanedLines []string
+	cleanedLines := make([]string, 0, len(lines))
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed != "" {
 			// Replace multiple spaces/tabs inside a single line
-			reSpaces := regexp.MustCompile(`\s+`)
 			normalizedLine := reSpaces.ReplaceAllString(trimmed, " ")
 			cleanedLines = append(cleanedLines, normalizedLine)
 		}
