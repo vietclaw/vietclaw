@@ -18,6 +18,8 @@ var (
 	reStyle  = regexp.MustCompile(`(?s)<style[^>]*>.*?</style>`)
 	reTags   = regexp.MustCompile(`<[^>]*>`)
 	reSpaces = regexp.MustCompile(`\s+`)
+	reURL    = regexp.MustCompile(`href="([^"]+)"`)
+	reTag    = regexp.MustCompile(`<[^>]*>`)
 )
 
 // WebSearch searches the web using DuckDuckGo HTML search.
@@ -97,9 +99,6 @@ func ParseDDGHTML(htmlContent string) []SearchResult {
 	if len(chunks) <= 1 {
 		return results
 	}
-
-	reURL := regexp.MustCompile(`href="([^"]+)"`)
-	reTag := regexp.MustCompile(`<[^>]*>`)
 
 	for _, chunk := range chunks[1:] {
 		// Find title anchor which has class="result__a"
