@@ -35,9 +35,6 @@ func (s *Store) CurateDuplicates(ctx context.Context, scope string) (CurationRes
 			continue
 		}
 		if keptID, ok := seen[key]; ok {
-			if err := s.Delete(ctx, rec.ID); err != nil {
-				return CurationResult{}, err
-			}
 			result.Removed++
 			result.TextRemoved++
 			result.Clusters = append(result.Clusters, CurationCluster{KeptID: keptID, RemovedID: rec.ID})
@@ -46,9 +43,6 @@ func (s *Store) CurateDuplicates(ctx context.Context, scope string) (CurationRes
 		seen[key] = rec.ID
 
 		if keptID, similarity := semanticDuplicate(rec, kept); keptID != 0 {
-			if err := s.Delete(ctx, rec.ID); err != nil {
-				return CurationResult{}, err
-			}
 			result.Removed++
 			result.SemanticRemoved++
 			result.Clusters = append(result.Clusters, CurationCluster{KeptID: keptID, RemovedID: rec.ID, Similarity: similarity})
@@ -56,6 +50,18 @@ func (s *Store) CurateDuplicates(ctx context.Context, scope string) (CurationRes
 		}
 		kept = append(kept, rec)
 	}
+
+	// Collect all IDs to remove
+	if len(result.Clusters) > 0 {
+		idsToRemove := make([]int64, 0, len(result.Clusters))
+		for _, cluster := range result.Clusters {
+			idsToRemove = append(idsToRemove, cluster.RemovedID)
+		}
+		if err := s.DeleteMany(ctx, idsToRemove); err != nil {
+			return CurationResult{}, err
+		}
+	}
+
 	return result, nil
 }
 
