@@ -319,7 +319,7 @@ func (t EnvGet) Run(ctx context.Context, input string) (string, error) {
 
 	// Security filter: block sensitive terms
 	upperKey := strings.ToUpper(args.Key)
-	sensitiveTerms := []string{"KEY", "TOKEN", "SECRET", "PASSWORD", "AUTH"}
+	sensitiveTerms := []string{"KEY", "TOKEN", "SECRET", "PASSWORD", "AUTH", "CREDENTIAL", "PASSPHRASE", "PRIVATE", "CERT", "JWT", "SESSION"}
 	for _, term := range sensitiveTerms {
 		if strings.Contains(upperKey, term) {
 			return "", fmt.Errorf("access to sensitive environment variable blocked for security reasons")

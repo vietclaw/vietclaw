@@ -134,10 +134,18 @@ func TestJSONFormat(t *testing.T) {
 
 func TestEnvGetSecurity(t *testing.T) {
 	eg := tools.EnvGet{}
+	os.Setenv("SOME_PRIVATE_CERT", "test_cert")
+	defer os.Unsetenv("SOME_PRIVATE_CERT")
+
+	_, err := eg.Run(context.Background(), `{"key": "SOME_PRIVATE_CERT"}`)
+	if err == nil {
+		t.Error("expected error/blocked access for sensitive env var, got nil")
+	}
+
 	os.Setenv("MY_APP_API_KEY", "sensitive_secret_123")
 	defer os.Unsetenv("MY_APP_API_KEY")
 
-	_, err := eg.Run(context.Background(), `{"key": "MY_APP_API_KEY"}`)
+	_, err = eg.Run(context.Background(), `{"key": "MY_APP_API_KEY"}`)
 	if err == nil {
 		t.Error("expected error/blocked access for sensitive env var, got nil")
 	}
