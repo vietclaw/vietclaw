@@ -2,9 +2,41 @@ package web
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 
 	"vietclaw/internal/app"
 )
+
+func requireOriginMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			origin = r.Header.Get("Referer")
+		}
+
+		if origin != "" {
+			u, err := url.Parse(origin)
+			if err != nil {
+				writeError(w, http.StatusForbidden, "invalid origin")
+				return
+			}
+
+			requestHost := r.Host
+			if !strings.EqualFold(u.Host, requestHost) {
+				writeError(w, http.StatusForbidden, "forbidden: cross-site request forgery detected")
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
 
 func NewRouter(application *app.App) http.Handler {
 	mux := http.NewServeMux()
@@ -48,5 +80,5 @@ func NewRouter(application *app.App) http.Handler {
 	mux.HandleFunc("POST /api/channels/discord/test", handleDiscordTest(application))
 	mux.HandleFunc("POST /api/channels/telegram/test", handleTelegramTest(application))
 	mux.HandleFunc("GET /", handleStatic(application))
-	return mux
+	return requireOriginMiddleware(mux)
 }
