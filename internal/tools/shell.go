@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -119,7 +120,8 @@ func (p Policy) ShellNetworkAllowed(command string) error {
 		if strings.Contains(candidate, "/") || strings.Contains(candidate, "\\") || strings.Contains(candidate, "$") {
 			continue
 		}
-		if ip := net.ParseIP(candidate); ip != nil {
+		normalized := normalizeIPv4(candidate)
+		if ip := net.ParseIP(normalized); ip != nil {
 			if err := p.ipAllowed(candidate, ip); err != nil {
 				return err
 			}
@@ -203,4 +205,77 @@ func hostInPatterns(host string, patterns []string) bool {
 
 func privateIP(ip net.IP) bool {
 	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
+}
+
+// normalizeIPv4 attempts to parse a string as an IPv4 address according to
+// standard inet_aton rules (allowing hex, octal, integer, and < 4 parts), and
+// returns it in dotted-quad format. If parsing fails, it returns the original string.
+func normalizeIPv4(ipStr string) string {
+	parts := strings.Split(ipStr, ".")
+	if len(parts) > 4 {
+		return ipStr
+	}
+
+	var parsedParts []int64
+	for _, part := range parts {
+		if part == "" {
+			return ipStr
+		}
+
+		var val int64
+		var err error
+
+		if strings.HasPrefix(strings.ToLower(part), "0x") {
+			val, err = strconv.ParseInt(part[2:], 16, 64)
+		} else if strings.HasPrefix(part, "0") && len(part) > 1 {
+			val, err = strconv.ParseInt(part[1:], 8, 64)
+		} else {
+			val, err = strconv.ParseInt(part, 10, 64)
+		}
+
+		if err != nil || val < 0 || val > 0xffffffff {
+			return ipStr
+		}
+		parsedParts = append(parsedParts, val)
+	}
+
+	if len(parsedParts) == 0 {
+		return ipStr
+	}
+
+	var finalParts [4]int64
+
+	switch len(parsedParts) {
+	case 1:
+		finalParts[0] = (parsedParts[0] >> 24) & 0xff
+		finalParts[1] = (parsedParts[0] >> 16) & 0xff
+		finalParts[2] = (parsedParts[0] >> 8) & 0xff
+		finalParts[3] = parsedParts[0] & 0xff
+	case 2:
+		if parsedParts[0] > 255 {
+			return ipStr
+		}
+		finalParts[0] = parsedParts[0]
+		finalParts[1] = (parsedParts[1] >> 16) & 0xff
+		finalParts[2] = (parsedParts[1] >> 8) & 0xff
+		finalParts[3] = parsedParts[1] & 0xff
+	case 3:
+		if parsedParts[0] > 255 || parsedParts[1] > 255 {
+			return ipStr
+		}
+		finalParts[0] = parsedParts[0]
+		finalParts[1] = parsedParts[1]
+		finalParts[2] = (parsedParts[2] >> 8) & 0xff
+		finalParts[3] = parsedParts[2] & 0xff
+	case 4:
+		if parsedParts[0] > 255 || parsedParts[1] > 255 || parsedParts[2] > 255 || parsedParts[3] > 255 {
+			return ipStr
+		}
+		finalParts[0] = parsedParts[0]
+		finalParts[1] = parsedParts[1]
+		finalParts[2] = parsedParts[2]
+		finalParts[3] = parsedParts[3]
+	}
+
+	return fmt.Sprintf("%d.%d.%d.%d", finalParts[0], finalParts[1], finalParts[2], finalParts[3])
 }
