@@ -76,12 +76,12 @@ type StreamChunk struct {
 	SessionID       string     `json:"session_id,omitempty"`
 	ParentSessionID string     `json:"parent_session_id,omitempty"`
 	Text            string     `json:"text"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-	ToolName   string     `json:"tool_name,omitempty"`
-	ToolInput  string     `json:"tool_input,omitempty"`
-	ToolResult string     `json:"tool_result,omitempty"`
-	Done       bool       `json:"done"`
-	Error      string     `json:"error,omitempty"`
+	ToolCalls       []ToolCall `json:"tool_calls,omitempty"`
+	ToolName        string     `json:"tool_name,omitempty"`
+	ToolInput       string     `json:"tool_input,omitempty"`
+	ToolResult      string     `json:"tool_result,omitempty"`
+	Done            bool       `json:"done"`
+	Error           string     `json:"error,omitempty"`
 }
 
 type CostEstimate struct {
