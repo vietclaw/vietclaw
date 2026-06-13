@@ -82,6 +82,13 @@ func TestStripHTML(t *testing.T) {
 	}
 }
 
+func TestWebSearchEmptyResultsMessage(t *testing.T) {
+	results := tools.ParseDDGHTML("<html><body><p>no results</p></body></html>")
+	if len(results) != 0 {
+		t.Fatalf("expected empty parse")
+	}
+}
+
 func TestWebSearchRunValidation(t *testing.T) {
 	ws := tools.WebSearch{}
 	_, err := ws.Run(context.Background(), `{"query": ""}`)

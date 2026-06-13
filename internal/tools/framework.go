@@ -117,45 +117,54 @@ func AgentCreateDefinition() providers.ToolDefinition {
 	return providers.ToolDefinition{
 		Type: "function",
 		Function: providers.FunctionDetail{
-			Name:        ToolAgentCreate,
-			Description: "Create a new specialized agent directory with AGENT.md, skills, and tool guides. Only available when allow_auto_create is enabled in settings.",
+			Name: ToolAgentCreate,
+			Description: "Create a new specialized agent at ~/.vietclaw/agents/<id>/ with AGENT.md, skills/*.md, and tools/*.md guides. " +
+				"REQUIRED: persona is the full AGENT.md markdown body in English OR Vietnamese (>=400 chars, >=3 ## sections). " +
+				"Set language to vi or en in frontmatter; skills and tool_guides should use the same language. " +
+				"REQUIRED: skills[] with >=1 detailed skill (instructions >=120 chars). " +
+				"REQUIRED: tool_guides[] for every tool in tools[] (instructions >=80 chars each). " +
+				"Do NOT create stub agents with 1-4 line descriptions — validation will reject them.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"id":           map[string]any{"type": "string"},
-					"name":         map[string]any{"type": "string"},
-					"language":     map[string]any{"type": "string"},
-					"persona":      map[string]any{"type": "string"},
-					"tools":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+					"id":           map[string]any{"type": "string", "description": "Agent id: lowercase [a-z0-9][a-z0-9_-]*"},
+					"name":         map[string]any{"type": "string", "description": "Human-readable display name"},
+					"language":     map[string]any{"type": "string", "description": "vi or en — persona/skills/guides may be written in either language"},
+					"persona":      map[string]any{"type": "string", "description": "Full AGENT.md markdown body (English or Vietnamese). Multi-section detailed spec (>=400 chars, >=3 ## headings)."},
+					"tools":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Built-in tool names this agent may call"},
 					"providers":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-					"model":        map[string]any{"type": "string"},
+					"model":        map[string]any{"type": "string", "description": "inherit, catalog id, or provider/model"},
 					"memory_scope": map[string]any{"type": "string"},
 					"max_steps":    map[string]any{"type": "integer"},
 					"spawnable":    map[string]any{"type": "boolean"},
 					"skills": map[string]any{
-						"type": "array",
+						"type":        "array",
+						"description": "At least one skill playbook (skills/<name>.md)",
 						"items": map[string]any{
 							"type": "object",
 							"properties": map[string]any{
 								"name":         map[string]any{"type": "string"},
 								"triggers":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-								"instructions": map[string]any{"type": "string"},
+								"instructions": map[string]any{"type": "string", "description": "Detailed skill instructions (>=120 chars)"},
 							},
+							"required": []string{"name", "instructions"},
 						},
 					},
 					"tool_guides": map[string]any{
-						"type": "array",
+						"type":        "array",
+						"description": "One guide per tool in tools[] (tools/<tool>.md)",
 						"items": map[string]any{
 							"type": "object",
 							"properties": map[string]any{
 								"tool":         map[string]any{"type": "string"},
 								"triggers":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-								"instructions": map[string]any{"type": "string"},
+								"instructions": map[string]any{"type": "string", "description": "When/how to use this tool (>=80 chars)"},
 							},
+							"required": []string{"tool", "instructions"},
 						},
 					},
 				},
-				"required": []string{"id", "persona"},
+				"required": []string{"id", "persona", "skills", "tool_guides"},
 			},
 		},
 	}

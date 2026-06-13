@@ -24,6 +24,7 @@ import (
 	"vietclaw/internal/logging"
 	"vietclaw/internal/scheduler"
 	"vietclaw/internal/version"
+	"vietclaw/internal/websearch"
 	webserver "vietclaw/internal/web"
 )
 
@@ -67,6 +68,18 @@ func runDaemon() error {
 	}
 	if err := os.MkdirAll(cfg.Agent.Workspace, 0o755); err != nil {
 		return fmt.Errorf("create workspace: %w", err)
+	}
+
+	if updated, added, err := websearch.EnsureMCPEnabled(cfg); err == nil && added {
+		cfg = updated
+		logger.Printf("auto-enabled open-websearch MCP (npx %s)", websearch.NpmPackage)
+		if paths.ConfigFile != "" {
+			if err := config.Save(paths.ConfigFile, cfg); err != nil {
+				logger.Printf("warning: save open-websearch config: %v", err)
+			}
+		}
+	} else if err != nil {
+		logger.Printf("open-websearch MCP not available: %v (using built-in DuckDuckGo search)", err)
 	}
 
 	application := &app.App{

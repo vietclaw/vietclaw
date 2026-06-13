@@ -267,7 +267,10 @@
   "tool.ui.url_parse": "Đã parse URL",
   "tool.ui.uuid_generate": "Đã tạo UUID",
   "tool.ui.web_fetch": "Đã truy cập",
+  "tool.ui.web_fetch_failed": "Truy cập thất bại",
   "tool.ui.web_search": "Đã tìm kiếm",
+  "tool.ui.web_search_failed": "Tìm kiếm thất bại",
+  "tool.ui.failed": "Tool thất bại",
   "tool.ui.no_output": "Không có stdout/stderr",
   "tool.call_detail": "Lệnh gọi",
   "tool.result_detail": "Kết quả"

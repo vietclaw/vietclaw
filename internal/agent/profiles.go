@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"vietclaw/internal/config"
+	"vietclaw/internal/i18n"
 	"vietclaw/internal/providers"
 )
 
@@ -70,10 +71,28 @@ func (s *Service) profileMaxSteps(agentID string) int {
 func (s *Service) applyProfilePersona(req ChatRequest, messages []providers.Message) []providers.Message {
 	profile := s.profile(req.AgentID)
 	if strings.TrimSpace(profile.Persona) == "" || len(messages) == 0 || messages[0].Role != "system" {
-		return messages
+		return s.applyWebResearchGuide(req, messages)
 	}
 	messages[0].Content += "\n\nAgent persona:\n" + profile.Persona
-	return s.applyToolGuides(req.AgentID, messages)
+	messages = s.applyToolGuides(req.AgentID, messages)
+	return s.applyWebResearchGuide(req, messages)
+}
+
+func (s *Service) applyWebResearchGuide(req ChatRequest, messages []providers.Message) []providers.Message {
+	if len(messages) == 0 || messages[0].Role != "system" {
+		return messages
+	}
+	profile := s.profile(req.AgentID)
+	for _, def := range s.tools.GetDefinitionsForProfile(profile, false) {
+		if def.Function.Name == "web_search" {
+			guide := s.text(i18n.SystemWebResearchGuide)
+			if !strings.Contains(messages[0].Content, guide) {
+				messages[0].Content += "\n\n" + guide
+			}
+			break
+		}
+	}
+	return messages
 }
 
 func (s *Service) applyToolGuides(agentID string, messages []providers.Message) []providers.Message {

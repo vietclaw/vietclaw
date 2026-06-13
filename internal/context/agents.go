@@ -16,6 +16,7 @@ func (b *Builder) agentContextBlock(lang string) string {
 	lines := []string{i18n.T(lang, i18n.SystemAgentsHeader)}
 	if b.cfg.Framework.AllowAutoCreate {
 		lines = append(lines, i18n.T(lang, i18n.SystemAgentsAutoCreateEnabled))
+		lines = append(lines, i18n.T(lang, i18n.SystemAgentsAutoCreateGuide))
 	} else {
 		lines = append(lines, i18n.T(lang, i18n.SystemAgentsAutoCreateDisabled))
 	}

@@ -217,6 +217,9 @@ func (s *Service) handleAgentCreate(ctx context.Context, argsJSON string) (strin
 	if !req.Spawnable {
 		req.Spawnable = true
 	}
+	if err := agentfs.ValidateCreateRequest(req); err != nil {
+		return "", err
+	}
 
 	dir, err := agentfs.CreateAgent(s.agents.Root(), req)
 	if err != nil {

@@ -586,7 +586,7 @@ watch(currentSessionId, () => {
                       >
                         {{ toolDisplayLabel(block.group) }}
                       </span>
-                      <template v-if="!block.group.result && toolRequestSummary(block.group.input)">
+                      <template v-if="toolRequestSummary(block.group.input) && (!block.group.result || isToolFailed(block.group))">
                         <span class="truncate" :class="isToolFailed(block.group) ? 'text-vc-error/80' : 'text-vc-text-muted'">
                           - {{ toolRequestSummary(block.group.input) }}
                         </span>

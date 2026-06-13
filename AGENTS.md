@@ -55,7 +55,7 @@ max_steps: 0
 spawnable: true
 auto_create: false
 ---
-Persona goes here...
+Persona goes here (English or Vietnamese)...
 ```
 
 ### `tools/*.md`
@@ -109,7 +109,7 @@ Migration flag: `agents_migrated_v1` in DB `settings`; runs on `init` / `daemon`
 
 1. **Single profile source:** read from `internal/agentfs`; do not reintroduce `config.Agents[]`.
 2. **Spawn must go through RunPool** — do not call `Delegate` directly and skip the semaphore.
-3. **`agent_create`** must check `allow_auto_create` and `max_total_agents`.
+3. **`agent_create`** must check `allow_auto_create` and `max_total_agents`, and **`ValidateCreateRequest`** (persona ≥400 chars, ≥3 `##` sections, skills + tool_guides).
 4. **Child model:** `inherit` → parent's model; or catalog id; or `provider/model`.
 5. **Framework tools** are registered in `internal/tools/framework.go`; handled in `internal/agent/spawn.go`.
 6. **`agent_delegate`** stays for compatibility — sync alias of `agent_spawn`.

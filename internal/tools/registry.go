@@ -167,9 +167,41 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, argsJSON string
 			return t.Run(ctx, argsJSON)
 		}
 		return t.Run(ctx, args.Command)
+	case "web_search":
+		return r.runWebSearch(ctx, argsJSON)
 	default:
 		return t.Run(ctx, argsJSON)
 	}
+}
+
+func (r *ToolRegistry) runWebSearch(ctx context.Context, argsJSON string) (string, error) {
+	if ref, ok := r.mcpOpenWebSearch(); ok {
+		out, err := ref.client.Execute(ctx, ref.name, argsJSON)
+		if err == nil && strings.TrimSpace(out) != "" && !isEmptySearchPayload(out) {
+			return out, nil
+		}
+	}
+	tool, ok := r.tools["web_search"]
+	if !ok {
+		return "", fmt.Errorf("tool not found: web_search")
+	}
+	return tool.Run(ctx, argsJSON)
+}
+
+func (r *ToolRegistry) mcpOpenWebSearch() (mcpToolRef, bool) {
+	ref, ok := r.mcp["mcp_open_websearch_search"]
+	return ref, ok
+}
+
+func isEmptySearchPayload(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "[]" || trimmed == "{}" {
+		return true
+	}
+	if strings.Contains(trimmed, "No web results found") || strings.Contains(trimmed, "no results") {
+		return true
+	}
+	return false
 }
 
 func (r *ToolRegistry) GetDefinitions() []providers.ToolDefinition {
@@ -249,13 +281,13 @@ func (r *ToolRegistry) GetDefinitionsForProfile(profile config.AgentProfileConfi
 		Type: "function",
 		Function: providers.FunctionDetail{
 			Name:        "web_search",
-			Description: "Search the web using DuckDuckGo.",
+			Description: i18n.T(lang, i18n.ToolWebSearch),
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"query": map[string]any{
 						"type":        "string",
-						"description": "The search query term.",
+						"description": i18n.T(lang, i18n.ToolQueryParam),
 					},
 				},
 				"required": []string{"query"},
@@ -266,13 +298,13 @@ func (r *ToolRegistry) GetDefinitionsForProfile(profile config.AgentProfileConfi
 		Type: "function",
 		Function: providers.FunctionDetail{
 			Name:        "web_fetch",
-			Description: "Fetch clean text content from a web URL.",
+			Description: i18n.T(lang, i18n.ToolWebFetch),
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"url": map[string]any{
 						"type":        "string",
-						"description": "The web URL to fetch.",
+						"description": i18n.T(lang, i18n.ToolURLParam),
 					},
 				},
 				"required": []string{"url"},

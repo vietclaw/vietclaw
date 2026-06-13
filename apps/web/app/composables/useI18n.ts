@@ -34,8 +34,8 @@ export function useI18n() {
     const label = catalogs[lang.value]?.[key] ?? catalogs.vi[key]
     if (label) return label
     if (failed) {
-      const fallback = catalogs[lang.value]?.[`tool.ui.${normalized}`] ?? catalogs.vi[`tool.ui.${normalized}`]
-      if (fallback) return fallback
+      const generic = catalogs[lang.value]?.['tool.ui.failed'] ?? catalogs.vi['tool.ui.failed']
+      if (generic) return generic
     }
     return toolName
   }

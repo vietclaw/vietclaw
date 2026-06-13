@@ -65,7 +65,7 @@ func (t WebSearch) Run(ctx context.Context, input string) (string, error) {
 
 	results := ParseDDGHTML(bodyHTML)
 	if len(results) == 0 {
-		return "[]", nil
+		return "No web results found for this query. Try different keywords (shorter query, English terms, or provider brand names). Do not guess URLs — run web_search again with a new query.", nil
 	}
 
 	// Limit to top 8 results
