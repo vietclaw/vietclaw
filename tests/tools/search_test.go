@@ -89,3 +89,47 @@ func TestWebSearchRunValidation(t *testing.T) {
 		t.Error("expected error with empty query, got nil")
 	}
 }
+
+func BenchmarkStripHTML(b *testing.B) {
+	htmlInput := `
+	<html>
+		<head>
+			<style>
+				body { color: red; margin: 0; padding: 0; font-family: sans-serif; }
+				.content { padding: 20px; }
+			</style>
+			<script>
+				console.log("hello");
+				function doSomething() { alert('test'); }
+			</script>
+		</head>
+		<body>
+			<div class="content">
+				<h1>Hello World</h1>
+				<p>This is a <b>simple</b> paragraph with <i>some formatting</i>.</p>
+				<ul>
+					<li>Item 1</li>
+					<li>Item 2</li>
+				</ul>
+				<p>
+					Another paragraph with multiple     spaces    and
+					newlines to test whitespace normalization.
+				</p>
+				<div>
+					<span>Nested</span> <span>Tags</span>
+				</div>
+			</div>
+		</body>
+	</html>
+	`
+
+	// Duplicate the input to make it larger for a more realistic benchmark
+	for i := 0; i < 5; i++ {
+		htmlInput += htmlInput
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tools.StripHTML(htmlInput)
+	}
+}
